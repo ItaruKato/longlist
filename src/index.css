@@ -140,3 +140,7 @@ a{color:var(--accent)}
 .tans{display:grid;grid-template-columns:56px minmax(0,1fr) auto;gap:8px;align-items:center;font-size:13px}
 .tans .tm{font-size:11px;color:var(--ink-3)}
 .tans .seg button{min-width:36px;padding:4px 8px}
+.trialshow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px}
+.trialshow button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:3px 10px;font-size:12px;color:var(--ink-2)}
+.trialshow button.on{background:var(--accent);border-color:var(--accent);color:var(--surface);font-weight:600}
+.tsplit{display:inline-block;font-size:11px;font-weight:600;color:var(--ta);background:var(--ta-bg);border-radius:4px;padding:0 6px;margin-right:6px}

@@ -16,7 +16,7 @@ import {
 } from '../data/firestore';
 import { displayName, type Row } from '../lib/rows';
 import type { UserState } from '../lib/state';
-import { pickSample, summarize } from '../lib/trial';
+import { agreementOf, pickSample, summarize, type Agreement } from '../lib/trial';
 
 const TRIAL_ID = 't1';
 const SIZE = 200;
@@ -37,6 +37,7 @@ export function TrialPage({ db, rows, states, onOpen, selected }: { db: Firestor
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
+  const [show, setShow] = useState<'all' | Agreement | 'unjudged'>('all');
   const byId = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows]);
   const label = useMemo(() => new Map(defs.map((d) => [d.code, d.label])), [defs]);
   const fail = (e: unknown) => setErr(String((e as { code?: string }).code ?? e));
@@ -62,6 +63,14 @@ export function TrialPage({ db, rows, states, onOpen, selected }: { db: Firestor
   const ids = trial?.ids ?? [];
   const requested = trial?.requested ?? [];
   const pending = ids.length > 0 && requested.some((m) => ids.some((id) => !answers.get(id)?.[m] && !answers.get(id)?.error));
+  // 答えの分かれ方（メインのタグ）。分かれた会社から見ると比べやすい
+  const agree = new Map(ids.map((id) => [id, agreementOf(answers.get(id), requested)] as const));
+  const count = (k: Agreement) => ids.filter((id) => agree.get(id) === k).length;
+  const unjudged = (id: string) => requested.some((m) => answers.get(id)?.[m] && !trial?.verdicts?.[id]?.[m]);
+  const ORDER: Record<Agreement, number> = { split: 0, low: 1, same: 2, waiting: 3 };
+  const shownIds = ids
+    .filter((id) => (show === 'all' ? true : show === 'unjudged' ? unjudged(id) : agree.get(id) === show))
+    .sort((a, b) => ORDER[agree.get(a)!] - ORDER[agree.get(b)!]);
   useEffect(() => {
     if (!pending) return;
     const t = setInterval(() => setTick((n) => n + 1), 30_000);
@@ -133,15 +142,35 @@ export function TrialPage({ db, rows, states, onOpen, selected }: { db: Firestor
             読み直す
           </button>
         </div>
+        {requested.length > 1 && (
+          <div className="trialshow">
+            <span className="muted">見る会社</span>
+            {(
+              [
+                ['all', `すべて ${ids.length}`],
+                ['split', `答えが分かれた ${count('split')}`],
+                ['low', `同じだが迷いあり ${count('low')}`],
+                ['same', `${requested.length}つとも同じ ${count('same')}`],
+                ['unjudged', '○△× がまだ'],
+              ] as const
+            ).map(([k, t]) => (
+              <button key={k} type="button" className={show === k ? 'on' : ''} onClick={() => setShow(k)}>
+                {t}
+              </button>
+            ))}
+            {count('waiting') > 0 && <span className="muted">（答え待ち {count('waiting')}社）</span>}
+          </div>
+        )}
         {err && <p className="err">{err}</p>}
       </div>
       <div className="triallist">
-        {ids.map((id) => {
+        {shownIds.map((id) => {
           const r = byId.get(id);
           const a = answers.get(id);
           return (
             <div key={id} className={`tcard${selected === id ? ' sel' : ''}`}>
               <button type="button" className="tname" onClick={() => onOpen(id)} title="押すと詳しい情報（記事など）を出す">
+                {agree.get(id) === 'split' && <span className="tsplit">分かれた</span>}
                 {r ? displayName(r) : id}
                 {r?.industry && <small>（PR TIMES の業種：{r.industry}）</small>}
               </button>

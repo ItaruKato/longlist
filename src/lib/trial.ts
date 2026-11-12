@@ -43,3 +43,18 @@ export function summarize(
   }
   return s;
 }
+
+export type Agreement = 'same' | 'split' | 'low' | 'waiting';
+
+/**
+ * AI どうしの答えの分かれ方（メインのタグで比べる）。
+ * split：メインが分かれた、low：同じだがどれかが「迷い」、same：全部同じで迷いなし、waiting：答えがそろっていない
+ */
+export function agreementOf(answer: object | undefined, models: string[]): Agreement {
+  const a = (answer ?? {}) as Record<string, { main?: string; confidence?: string } | undefined>;
+  const xs = models.map((m) => a[m]);
+  if (!models.length || xs.some((x) => !x?.main)) return 'waiting';
+  if (new Set(xs.map((x) => x!.main)).size > 1) return 'split';
+  return xs.some((x) => x!.confidence === 'low') ? 'low' : 'same';
+}
+

@@ -8,7 +8,7 @@ const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { gunzipSync } = require('node:zlib');
 const { fromTuple } = require('../lib/src/lib/rows');
-const { pickSample } = require('../lib/src/lib/trial');
+const { pickSample, agreementOf } = require('../lib/src/lib/trial');
 
 const TRIAL = 't1';
 const SIZE = 200;
@@ -63,10 +63,12 @@ async function status() {
   if (!t) return console.log('お試しはまだありません');
   const counts = Object.fromEntries((t.requested ?? []).map((m) => [m, { answered: 0, low: 0, ok: 0, partial: 0, ng: 0 }]));
   let errors = 0;
+  const agree = { same: 0, split: 0, low: 0, waiting: 0 };
   for (let i = 0; i < t.ids.length; i += 100) {
     const snaps = await db.getAll(...t.ids.slice(i, i + 100).map((id) => db.doc(`industryTrials/${id}`)));
     for (const s of snaps) {
       if (s.get('error')) errors++;
+      agree[agreementOf(s.data(), t.requested ?? [])]++;
       for (const m of Object.keys(counts)) {
         const a = s.get(m);
         if (a?.main) {
@@ -81,6 +83,7 @@ async function status() {
   const queue = (await db.collection('industryQueue').count().get()).data().count;
   console.log(`お試し ${t.ids.length}社・依頼の残り ${queue}件・エラー ${errors}社`);
   for (const [m, c] of Object.entries(counts)) console.log(`  ${m}: 答え ${c.answered}・迷い ${c.low}・見直し ○${c.ok} △${c.partial} ×${c.ng}`);
+  console.log(`  メインのタグ：全部同じ ${agree.same}・同じだが迷いあり ${agree.low}・分かれた ${agree.split}・答え待ち ${agree.waiting}`);
   const meta = (await db.doc('meta/industry').get()).data();
   if (meta) console.log('台帳の処理（直近）:', JSON.stringify(meta));
 }
