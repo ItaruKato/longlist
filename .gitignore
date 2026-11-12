@@ -1,0 +1,22 @@
+# 依存・ビルド成果物
+node_modules
+dist
+functions/lib
+functions/node_modules
+*.local
+
+# Firebase
+.firebase
+*-debug.log*
+
+# ログ
+logs
+*.log
+
+# エディタ・OS
+.vscode/*
+.idea
+.DS_Store
+
+# Claude Code の作業用
+.claude/worktrees/

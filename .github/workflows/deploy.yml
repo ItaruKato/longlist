@@ -1,0 +1,39 @@
+name: test-and-deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: prtimes-inbox
+  # prtimes-inbox と同じプロジェクト番号（秘密情報ではない）
+  PROJECT_NUMBER: '723210521199'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: 画面のテストとビルド（共有の決まりの確認を含む）
+        run: npm ci && npm run lint && npm test && npm run build
+
+      - name: Google Cloud に認証
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/${{ env.PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github
+          service_account: github-deploy@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
+      # Long List の分（prtimes-longlist サイト）だけを出す。Firestore・Watcher の関数には触れない
+      - name: Firebase にデプロイ（Long List の分だけ）
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: npx -y firebase-tools@14.11.0 deploy --only hosting:longlist --project "$PROJECT_ID" --non-interactive
