@@ -27,3 +27,5 @@ button{font:inherit;color:inherit;cursor:pointer}
 .counts{display:grid;grid-template-columns:1fr auto;gap:6px 12px;margin:0}
 .counts dt{color:var(--ink-2)}
 .counts dd{margin:0;font-family:var(--f-mono);font-variant-numeric:tabular-nums;text-align:right}
+.card p.source{font-size:11px;color:var(--ink-3)}
+.card a{color:var(--accent)}

@@ -31,12 +31,21 @@ export default function App() {
             <dd>{n(counts.companies)}社</dd>
             <dt>法人番号が決まった会社</dt>
             <dd>{n(counts.withCorporateNumber)}社</dd>
+            <dt>厚生年金の加入者数が分かった会社</dt>
+            <dd>{n(counts.withInsured)}社</dd>
+            <dt>財務（有価証券報告書）がある会社</dt>
+            <dd>{n(counts.withFinance)}社</dd>
           </dl>
         ) : err ? (
           <p className="err">台帳を読めませんでした（{err}）</p>
         ) : (
           <p>台帳を読み込み中…</p>
         )}
+        <p className="source">
+          法人番号・加入者数・財務の出典：「
+          <a href="https://info.gbiz.go.jp/" target="_blank" rel="noopener noreferrer">Gビズインフォ</a>
+          」（経済産業省）をもとに作成
+        </p>
         <button className="btn" type="button" onClick={() => signOut(auth)}>ログアウト</button>
       </div>
     </div>
