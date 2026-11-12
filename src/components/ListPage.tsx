@@ -151,21 +151,27 @@ export function ListPage({ db, onSignOut }: { db: Firestore; onSignOut: () => vo
     ) : shown.length === 0 ? (
       <p className="muted pad">条件に合う会社がありません。</p>
     ) : wide ? (
-      <>
-        <div className="thead">
-          <span>会社名</span>
-          <span className="c-ind">業界</span>
-          <span>都道府県</span>
-          <span className="num">人数</span>
-          <span className="num">資本金</span>
-          <span className="c-listed">上場</span>
-          <span className="num">最新記事</span>
-          <span className="num">1年</span>
-          <span>温度</span>
-          <span>進捗</span>
-        </div>
-        <VirtualList items={shown} rowHeight={40} render={renderTableRow} resetKey={resetKey} />
-      </>
+      <VirtualList
+        items={shown}
+        rowHeight={40}
+        render={renderTableRow}
+        resetKey={resetKey}
+        headerHeight={32}
+        header={
+          <div className="thead">
+            <span>会社名</span>
+            <span className="c-ind">業界</span>
+            <span>都道府県</span>
+            <span className="num">人数</span>
+            <span className="num">資本金</span>
+            <span className="c-listed">上場</span>
+            <span className="num">最新記事</span>
+            <span className="num">1年</span>
+            <span>温度</span>
+            <span>進捗</span>
+          </div>
+        }
+      />
     ) : (
       <VirtualList items={shown} rowHeight={86} render={renderCard} resetKey={resetKey} className="cards" />
     );

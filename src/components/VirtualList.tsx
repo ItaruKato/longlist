@@ -7,12 +7,17 @@ export function VirtualList<T>({
   render,
   resetKey,
   className,
+  header,
+  headerHeight = 0,
 }: {
   items: T[];
   rowHeight: number;
   render: (item: T, index: number) => ReactNode;
   resetKey: string;
   className?: string;
+  /** 一覧と同じ幅で上に貼りつく見出し（スクロールバーの幅で列がずれないように、一覧の中に置く） */
+  header?: ReactNode;
+  headerHeight?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [top, setTop] = useState(0);
@@ -29,10 +34,12 @@ export function VirtualList<T>({
     ref.current?.scrollTo({ top: 0 });
     setTop(0);
   }, [resetKey]);
-  const start = Math.max(0, Math.floor(top / rowHeight) - 8);
-  const end = Math.min(items.length, Math.ceil((top + height) / rowHeight) + 8);
+  const y = Math.max(0, top - headerHeight);
+  const start = Math.max(0, Math.floor(y / rowHeight) - 8);
+  const end = Math.min(items.length, Math.ceil((y + height) / rowHeight) + 8);
   return (
     <div ref={ref} className={`vlist ${className ?? ''}`} onScroll={(e) => setTop(e.currentTarget.scrollTop)}>
+      {header}
       <div style={{ height: items.length * rowHeight, position: 'relative' }}>
         {items.slice(start, end).map((it, i) => (
           <div key={start + i} style={{ position: 'absolute', top: (start + i) * rowHeight, left: 0, right: 0, height: rowHeight }}>
