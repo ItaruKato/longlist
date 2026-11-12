@@ -1,7 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import type { Firestore } from 'firebase/firestore';
 import { loadContacts, loadIndex, watchStates, type IndexMeta } from '../data/firestore';
-import { applyFilters, defaultDir, EMPTY_FILTERS, headcount, sortRows, SORTS, type Filters, type SortDir, type SortKey } from '../lib/filter';
+import { applyFilters, defaultDir, EMPTY_FILTERS, headcount, sortRows, SORTS, type Filters, type SortDir, type SortKey, type SortSpec } from '../lib/filter';
 import { toCsv } from '../lib/csv';
 import { displayName, type Row } from '../lib/rows';
 import { stageOf, type UserState } from '../lib/state';
@@ -15,15 +15,24 @@ interface View {
   f: Filters;
   sort: SortKey;
   dir: SortDir;
+  /** 同じ値のときの2番目の並べ替え（なしは null） */
+  then: SortSpec | null;
 }
+const isKey = (k: unknown): k is SortKey => SORTS.some((s) => s.key === k);
 function loadView(): View {
   try {
     const v = JSON.parse(localStorage.getItem(KEY) ?? 'null');
-    if (v?.f && SORTS.some((s) => s.key === v.sort)) return { f: { ...EMPTY_FILTERS, ...v.f }, sort: v.sort, dir: v.dir === 'asc' || v.dir === 'desc' ? v.dir : defaultDir(v.sort) };
+    if (v?.f && isKey(v.sort))
+      return {
+        f: { ...EMPTY_FILTERS, ...v.f },
+        sort: v.sort,
+        dir: v.dir === 'asc' || v.dir === 'desc' ? v.dir : defaultDir(v.sort),
+        then: v.then && isKey(v.then.key) ? { key: v.then.key, dir: v.then.dir === 'asc' ? 'asc' : 'desc' } : null,
+      };
   } catch {
     /* 保存できない端末では毎回はじめから */
   }
-  return { f: EMPTY_FILTERS, sort: 'last', dir: 'desc' };
+  return { f: EMPTY_FILTERS, sort: 'last', dir: 'desc', then: null };
 }
 function saveView(v: View) {
   try {
@@ -80,7 +89,17 @@ export function ListPage({ db, onSignOut }: { db: Firestore; onSignOut: () => vo
   };
   /** 並べ替え：別の列なら決まった向き、同じ列なら向きを逆にする */
   const setSort = (s: SortKey, dir?: SortDir) => {
-    const v = { ...view, sort: s, dir: dir ?? (view.sort === s ? (view.dir === 'asc' ? 'desc' : 'asc') : defaultDir(s)) };
+    const d: SortDir = dir ?? (view.sort === s ? (view.dir === 'asc' ? 'desc' : 'asc') : defaultDir(s));
+    // 2番目と同じ列を1番目にしたら、2番目はなしにする
+    const v: View = { ...view, sort: s, dir: d, then: view.then?.key === s ? null : view.then };
+    setView(v);
+    saveView(v);
+  };
+  /** 2番目の並べ替え：別の列なら決まった向き、同じ列なら向きを逆にする。null でなし */
+  const setThen = (s: SortKey | null, dir?: SortDir) => {
+    const then: SortSpec | null =
+      s === null || s === view.sort ? null : { key: s, dir: dir ?? (view.then?.key === s ? (view.then.dir === 'asc' ? 'desc' : 'asc') : defaultDir(s)) };
+    const v: View = { ...view, then };
     setView(v);
     saveView(v);
   };
@@ -101,10 +120,10 @@ export function ListPage({ db, onSignOut }: { db: Firestore; onSignOut: () => vo
   const all = useMemo(() => rows ?? [], [rows]);
   const industries = useMemo(() => [...new Set(all.map((r) => r.industry).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ja')), [all]);
   const owners = useMemo(() => [...new Set([...states.values()].map((s) => s.owner).filter((o): o is string => Boolean(o)))].sort(), [states]);
-  const shown = useMemo(() => sortRows(applyFilters(all, states, { ...f, q }, today), states, view.sort, view.dir), [all, states, f, q, today, view.sort, view.dir]);
+  const shown = useMemo(() => sortRows(applyFilters(all, states, { ...f, q }, today), states, view.sort, view.dir, view.then), [all, states, f, q, today, view.sort, view.dir, view.then]);
   const excludedCount = useMemo(() => applyFilters(all, states, { ...EMPTY_FILTERS, view: 'excluded' }, today).length, [all, states, today]);
   const selRow = sel ? all.find((r) => r.id === sel) : undefined;
-  const resetKey = JSON.stringify([f, view.sort, view.dir]);
+  const resetKey = JSON.stringify([f, view.sort, view.dir, view.then]);
 
   const exportCsv = async () => {
     if (!shown.length) return;
@@ -184,13 +203,14 @@ export function ListPage({ db, onSignOut }: { db: Firestore; onSignOut: () => vo
               <button
                 key={c.key}
                 type="button"
-                className={`${c.cls}${view.sort === c.key ? ' on' : ''}`}
+                className={`${c.cls}${view.sort === c.key ? ' on' : view.then?.key === c.key ? ' on2' : ''}`}
                 aria-sort={view.sort === c.key ? (view.dir === 'asc' ? 'ascending' : 'descending') : undefined}
-                title="押すと並べ替え（もう一度押すと逆の順）"
-                onClick={() => setSort(c.key)}
+                title="押すと並べ替え（もう一度押すと逆の順）。Shift を押しながらだと、同じ値のときの2番目の並べ替え"
+                onClick={(e) => (e.shiftKey ? setThen(c.key) : setSort(c.key))}
               >
                 {c.label}
                 {view.sort === c.key && <i>{view.dir === 'asc' ? '▲' : '▼'}</i>}
+                {view.then?.key === c.key && <i>2{view.then.dir === 'asc' ? '▲' : '▼'}</i>}
               </button>
             ))}
           </div>
@@ -237,6 +257,22 @@ export function ListPage({ db, onSignOut }: { db: Firestore; onSignOut: () => vo
           <button className="btn dir" type="button" onClick={() => setSort(view.sort, view.dir === 'asc' ? 'desc' : 'asc')} aria-label="並びの向きを逆にする" title="並びの向きを逆にする">
             {view.dir === 'asc' ? '▲' : '▼'}
           </button>
+          <span className="then">
+            <span className="muted">次に</span>
+            <select value={view.then?.key ?? ''} onChange={(e) => setThen(e.target.value ? (e.target.value as SortKey) : null, e.target.value ? defaultDir(e.target.value as SortKey) : undefined)} aria-label="同じ値のときの並び順">
+              <option value="">なし</option>
+              {SORTS.filter((s) => s.key !== view.sort).map((s) => (
+                <option key={s.key} value={s.key}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+            {view.then && (
+              <button className="btn dir" type="button" onClick={() => setThen(view.then!.key, view.then!.dir === 'asc' ? 'desc' : 'asc')} aria-label="2番目の並びの向きを逆にする">
+                {view.then.dir === 'asc' ? '▲' : '▼'}
+              </button>
+            )}
+          </span>
           <button className="btn" type="button" disabled={csv !== null || !shown.length} onClick={exportCsv}>
             {csv !== null ? `書き出し中 ${Number(csv).toLocaleString()}/${shown.length.toLocaleString()}` : 'CSV'}
           </button>

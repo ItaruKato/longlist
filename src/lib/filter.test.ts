@@ -62,6 +62,20 @@ describe('sortRows', () => {
     expect(applyFilters(rows, new Map(), { ...EMPTY_FILTERS, q: '株式会社ワン' }, today).map((r) => r.id)).toEqual(['1']);
     expect(applyFilters(rows, new Map(), { ...EMPTY_FILTERS, q: 'ワン' }, today).map((r) => r.id)).toEqual(['1']);
   });
+  it('2番目の並べ替え：同じ値のときに使う', () => {
+    const rows = [
+      row('1', { pref: '大阪府', insured: 10 }),
+      row('2', { pref: '東京都', insured: 50 }),
+      row('3', { pref: '大阪府', insured: 300 }),
+      row('4', { pref: '東京都', insured: null }),
+      row('5', { pref: '東京都', insured: 5 }),
+    ];
+    const none = new Map<string, UserState>();
+    expect(sortRows(rows, none, 'pref', 'asc', { key: 'size', dir: 'desc' }).map((r) => r.id)).toEqual(['2', '5', '4', '3', '1']);
+    expect(sortRows(rows, none, 'pref', 'asc', { key: 'size', dir: 'asc' }).map((r) => r.id)).toEqual(['5', '2', '4', '1', '3']);
+    // 1番目と同じ列を選んでも壊れない
+    expect(sortRows(rows, none, 'size', 'desc', { key: 'size', dir: 'asc' }).map((r) => r.id)).toEqual(['3', '2', '1', '5', '4']);
+  });
   it('会社名は株式会社などを除いて並べる', () => {
     const rows = [row('1', { name: '株式会社ワン' }), row('2', { name: 'アイ合同会社' }), row('3', { name: '有限会社かきく' })];
     expect(sortRows(rows, new Map(), 'name').map((r) => r.id)).toEqual(['2', '3', '1']);

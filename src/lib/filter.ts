@@ -119,49 +119,67 @@ const TEMP_RANK: Record<string, number> = { A: 0, B: 1, C: 2 };
 /** 進捗の並び：動いている会社が先（受注 → 商談 → アプローチ中 → 未着手 → 対象外） */
 const PROGRESS_RANK: Record<string, number> = { 受注: 0, 商談: 1, アプローチ中: 2, 未着手: 3, 対象外: 4 };
 
-/** 並べ替え。空の値（人数不明など）は、向きに関係なく最後に置く */
-export function sortRows(rows: Row[], states: Map<string, UserState>, key: SortKey, dir: SortDir = defaultDir(key)): Row[] {
-  const value = (r: Row): number | string | null => {
+/** 並べ替えの条件（1番目、同じ値のときの2番目） */
+export interface SortSpec {
+  key: SortKey;
+  dir: SortDir;
+}
+
+function valueOf(key: SortKey, r: Row, s: UserState | undefined): number | string | null {
+  switch (key) {
+    case 'last':
+      return r.last || null;
+    case 'n1y':
+      return r.n1y;
+    case 'capital':
+      return r.capital;
+    case 'size':
+      return headcount(r);
+    case 'next':
+      return s?.nextDate || null;
+    case 'temp':
+      return s?.temperature ? TEMP_RANK[s.temperature] : null;
+    case 'progress':
+      return PROGRESS_RANK[stageOf(s)];
+    case 'name':
+      // 「株式会社」などを除いた名前で並べる
+      return displayName(r).normalize('NFKC').replace(LEGAL_FORM, '').trim() || displayName(r) || null;
+    case 'industry':
+      return r.industry || null;
+    case 'pref': {
+      const i = PREFS.indexOf(r.pref as (typeof PREFS)[number]);
+      return i >= 0 ? i : null;
+    }
+    case 'listed':
+      return r.listed || null;
+  }
+}
+
+/** 空の値（人数不明など）は、向きに関係なく最後 */
+function compare(a: number | string | null, b: number | string | null, dir: SortDir): number {
+  if (a === b) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  const c = typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b), 'ja');
+  return c * (dir === 'asc' ? 1 : -1);
+}
+
+/**
+ * 並べ替え。1番目の条件で並べ、同じ値のときは2番目の条件、それでも同じなら最新記事が新しい順。
+ * 空の値（人数不明など）は、向きに関係なく最後。
+ */
+export function sortRows(rows: Row[], states: Map<string, UserState>, key: SortKey, dir: SortDir = defaultDir(key), then?: SortSpec | null): Row[] {
+  const specs: SortSpec[] = [{ key, dir }, ...(then && then.key !== key ? [then] : []), { key: 'last', dir: 'desc' }];
+  const keyed = rows.map((r) => {
     const s = states.get(r.id);
-    switch (key) {
-      case 'last':
-        return r.last || null;
-      case 'n1y':
-        return r.n1y;
-      case 'capital':
-        return r.capital;
-      case 'size':
-        return headcount(r);
-      case 'next':
-        return s?.nextDate || null;
-      case 'temp':
-        return s?.temperature ? TEMP_RANK[s.temperature] : null;
-      case 'progress':
-        return PROGRESS_RANK[stageOf(s)];
-      case 'name':
-        // 「株式会社」などを除いた名前で並べる
-        return displayName(r).normalize('NFKC').replace(LEGAL_FORM, '').trim() || displayName(r) || null;
-      case 'industry':
-        return r.industry || null;
-      case 'pref': {
-        const i = PREFS.indexOf(r.pref as (typeof PREFS)[number]);
-        return i >= 0 ? i : null;
-      }
-      case 'listed':
-        return r.listed || null;
-    }
-  };
-  const sign = dir === 'asc' ? 1 : -1;
-  const keyed = rows.map((r) => ({ r, v: value(r) }));
+    return { r, v: specs.map((sp) => valueOf(sp.key, r, s)) };
+  });
   keyed.sort((a, b) => {
-    if (a.v === null || b.v === null) {
-      if (a.v !== b.v) return a.v === null ? 1 : -1;
-    } else if (a.v !== b.v) {
-      const c = typeof a.v === 'number' && typeof b.v === 'number' ? a.v - b.v : String(a.v).localeCompare(String(b.v), 'ja');
-      if (c) return c * sign;
+    for (let i = 0; i < specs.length; i++) {
+      const c = compare(a.v[i], b.v[i], specs[i].dir);
+      if (c) return c;
     }
-    // 同じ値のときは、最新記事が新しい順
-    return a.r.last === b.r.last ? 0 : a.r.last < b.r.last ? 1 : -1;
+    return 0;
   });
   return keyed.map((x) => x.r);
 }
