@@ -55,6 +55,21 @@ describe('sortRows', () => {
     expect(sortRows(rows, states, 'temp').map((r) => r.id)).toEqual(['3', '2', '1']);
     expect(sortRows(rows, states, 'next').map((r) => r.id)).toEqual(['3', '2', '1']);
   });
+  it('会社名は株式会社などを除いて並べる', () => {
+    const rows = [row('1', { name: '株式会社ワン' }), row('2', { name: 'アイ合同会社' }), row('3', { name: '有限会社かきく' })];
+    expect(sortRows(rows, new Map(), 'name').map((r) => r.id)).toEqual(['2', '3', '1']);
+  });
+  it('逆向きにしても、空の値は最後', () => {
+    const rows = [row('1', { capital: 1e7 }), row('2', { capital: null }), row('3', { capital: 5e8 })];
+    const none = new Map<string, UserState>();
+    expect(sortRows(rows, none, 'capital', 'desc').map((r) => r.id)).toEqual(['3', '1', '2']);
+    expect(sortRows(rows, none, 'capital', 'asc').map((r) => r.id)).toEqual(['1', '3', '2']);
+    const p = [row('1', { pref: '沖縄県' }), row('2', { pref: '' }), row('3', { pref: '北海道' })];
+    expect(sortRows(p, none, 'pref').map((r) => r.id)).toEqual(['3', '1', '2']);
+    expect(sortRows(p, none, 'pref', 'desc').map((r) => r.id)).toEqual(['1', '3', '2']);
+    const st = new Map<string, UserState>([['1', { progress: '商談' }], ['3', { progress: '対象外' }]]);
+    expect(sortRows(p, st, 'progress').map((r) => r.id)).toEqual(['1', '2', '3']);
+  });
 });
 
 describe('toCsv', () => {

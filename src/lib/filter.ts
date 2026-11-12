@@ -1,5 +1,6 @@
 import type { Row } from './rows';
 import { regionOf } from './region';
+import { PREFS } from './pref';
 import { stageOf, type UserState } from './state';
 
 export interface Filters {
@@ -34,16 +35,22 @@ export const EMPTY_FILTERS: Filters = {
   hasNext: false,
 };
 
-export type SortKey = 'last' | 'n1y' | 'capital' | 'size' | 'next' | 'temp' | 'name';
-export const SORTS: { key: SortKey; label: string }[] = [
-  { key: 'last', label: '最新記事が新しい順' },
-  { key: 'n1y', label: '記事が多い順' },
-  { key: 'capital', label: '資本金が大きい順' },
-  { key: 'size', label: '人数が多い順' },
-  { key: 'next', label: '次にやる日が近い順' },
-  { key: 'temp', label: '温度感の順' },
-  { key: 'name', label: '会社名の順' },
+export type SortKey = 'last' | 'n1y' | 'capital' | 'size' | 'next' | 'temp' | 'name' | 'industry' | 'pref' | 'listed' | 'progress';
+export type SortDir = 'asc' | 'desc';
+export const SORTS: { key: SortKey; label: string; dir: SortDir }[] = [
+  { key: 'last', label: '最新記事', dir: 'desc' },
+  { key: 'n1y', label: '記事の数（1年）', dir: 'desc' },
+  { key: 'capital', label: '資本金', dir: 'desc' },
+  { key: 'size', label: '人数', dir: 'desc' },
+  { key: 'next', label: '次にやる日', dir: 'asc' },
+  { key: 'temp', label: '温度感', dir: 'asc' },
+  { key: 'progress', label: '進捗', dir: 'asc' },
+  { key: 'name', label: '会社名', dir: 'asc' },
+  { key: 'industry', label: '業界', dir: 'asc' },
+  { key: 'pref', label: '都道府県（北から）', dir: 'asc' },
+  { key: 'listed', label: '上場', dir: 'desc' },
 ];
+export const defaultDir = (k: SortKey): SortDir => SORTS.find((s) => s.key === k)?.dir ?? 'desc';
 
 /** 人数の目安：厚生年金の被保険者数。なければ gBizINFO の従業員数 */
 export const headcount = (r: Row) => r.insured ?? r.employees;
@@ -103,23 +110,54 @@ export function applyFilters(rows: Row[], states: Map<string, UserState>, f: Fil
   });
 }
 
-const TEMP_ORDER: Record<string, number> = { A: 0, B: 1, C: 2 };
-const desc = (a: number | null, b: number | null) => (b ?? -1) - (a ?? -1);
+const LEGAL_FORM = /株式会社|有限会社|合同会社|合名会社|合資会社|\((株|有|同)\)/g;
+const TEMP_RANK: Record<string, number> = { A: 0, B: 1, C: 2 };
+/** 進捗の並び：動いている会社が先（受注 → 商談 → アプローチ中 → 未着手 → 対象外） */
+const PROGRESS_RANK: Record<string, number> = { 受注: 0, 商談: 1, アプローチ中: 2, 未着手: 3, 対象外: 4 };
 
-export function sortRows(rows: Row[], states: Map<string, UserState>, key: SortKey): Row[] {
-  const byLast = (a: Row, b: Row) => (a.last === b.last ? 0 : a.last < b.last ? 1 : -1);
-  const cmp: Record<SortKey, (a: Row, b: Row) => number> = {
-    last: byLast,
-    n1y: (a, b) => b.n1y - a.n1y || byLast(a, b),
-    capital: (a, b) => desc(a.capital, b.capital) || byLast(a, b),
-    size: (a, b) => desc(headcount(a), headcount(b)) || byLast(a, b),
-    next: (a, b) => {
-      const x = states.get(a.id)?.nextDate || '9999';
-      const y = states.get(b.id)?.nextDate || '9999';
-      return x.localeCompare(y) || byLast(a, b);
-    },
-    temp: (a, b) => (TEMP_ORDER[states.get(a.id)?.temperature ?? ''] ?? 3) - (TEMP_ORDER[states.get(b.id)?.temperature ?? ''] ?? 3) || byLast(a, b),
-    name: (a, b) => a.name.localeCompare(b.name, 'ja'),
+/** 並べ替え。空の値（人数不明など）は、向きに関係なく最後に置く */
+export function sortRows(rows: Row[], states: Map<string, UserState>, key: SortKey, dir: SortDir = defaultDir(key)): Row[] {
+  const value = (r: Row): number | string | null => {
+    const s = states.get(r.id);
+    switch (key) {
+      case 'last':
+        return r.last || null;
+      case 'n1y':
+        return r.n1y;
+      case 'capital':
+        return r.capital;
+      case 'size':
+        return headcount(r);
+      case 'next':
+        return s?.nextDate || null;
+      case 'temp':
+        return s?.temperature ? TEMP_RANK[s.temperature] : null;
+      case 'progress':
+        return PROGRESS_RANK[stageOf(s)];
+      case 'name':
+        // 「株式会社」などを除いた名前で並べる
+        return r.name.normalize('NFKC').replace(LEGAL_FORM, '').trim() || r.name || null;
+      case 'industry':
+        return r.industry || null;
+      case 'pref': {
+        const i = PREFS.indexOf(r.pref as (typeof PREFS)[number]);
+        return i >= 0 ? i : null;
+      }
+      case 'listed':
+        return r.listed || null;
+    }
   };
-  return [...rows].sort(cmp[key]);
+  const sign = dir === 'asc' ? 1 : -1;
+  const keyed = rows.map((r) => ({ r, v: value(r) }));
+  keyed.sort((a, b) => {
+    if (a.v === null || b.v === null) {
+      if (a.v !== b.v) return a.v === null ? 1 : -1;
+    } else if (a.v !== b.v) {
+      const c = typeof a.v === 'number' && typeof b.v === 'number' ? a.v - b.v : String(a.v).localeCompare(String(b.v), 'ja');
+      if (c) return c * sign;
+    }
+    // 同じ値のときは、最新記事が新しい順
+    return a.r.last === b.r.last ? 0 : a.r.last < b.r.last ? 1 : -1;
+  });
+  return keyed.map((x) => x.r);
 }
