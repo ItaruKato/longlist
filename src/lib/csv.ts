@@ -1,4 +1,5 @@
-import type { Row } from './rows';
+import { displayName, type Row } from './rows';
+import { legalLabel } from './legal';
 import { regionOf } from './region';
 import { stageOf, type UserState } from './state';
 
@@ -17,7 +18,7 @@ const cell = (v: unknown) => {
 };
 
 export const CSV_HEADER = [
-  '会社名', '法人番号', '業界', '都道府県', '地方', '資本金（円）', '厚生年金の加入者数', '従業員数', '売上高（円）', '上場',
+  '会社名', '法人格', 'PR TIMES での名前', '法人番号', '業界', '都道府県', '地方', '資本金（円）', '厚生年金の加入者数', '従業員数', '売上高（円）', '上場',
   '最新記事', '記事数（1年）', '温度感', '進捗', '次にやること', '次の日付', '担当', 'メモ', '代表者', '代表電話', 'HP', 'PR TIMES',
 ];
 
@@ -29,7 +30,7 @@ export function toCsv(rows: Row[], states: Map<string, UserState>, contacts: Map
     const c = contacts.get(r.id) ?? {};
     lines.push(
       [
-        r.name, r.cn, r.industry, r.pref, regionOf(r.pref) ?? '', r.capital, r.insured, r.employees, r.sales, LISTED[r.listed],
+        displayName(r), r.form ? legalLabel(r.form) : '', r.name, r.cn, r.industry, r.pref, regionOf(r.pref) ?? '', r.capital, r.insured, r.employees, r.sales, LISTED[r.listed],
         r.last, r.n1y, s?.temperature ?? '', stageOf(s), s?.nextText ?? '', s?.nextDate ?? '', s?.owner ?? '', s?.memo ?? '',
         c.representative ?? '', c.phone ?? '', c.url ?? '', prtimesCompanyUrl(r.id),
       ]
@@ -37,7 +38,7 @@ export function toCsv(rows: Row[], states: Map<string, UserState>, contacts: Map
         .join(','),
     );
   }
-  lines.push(cell('法人番号・加入者数・従業員数・売上高の出典：「Gビズインフォ」（経済産業省）をもとに作成'));
+  lines.push(cell('正式な会社名・法人番号・加入者数・従業員数・売上高の出典：「Gビズインフォ」（経済産業省）をもとに作成'));
   return '﻿' + lines.join('\r\n') + '\r\n';
 }
 

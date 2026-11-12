@@ -28,11 +28,18 @@ export interface Row {
   employees: number | null;
   /** 売上高（円。gBizINFO の有価証券報告書） */
   sales: number | null;
+  /** 正式な名前（gBizINFO の法人名＝国税庁の法人番号の登録。PR TIMES の名前と同じか、ないときは空） */
+  official: string;
+  /** 法人格（src/lib/legal.ts の code。不明は空） */
+  form: string;
 }
 
-export type RowTuple = [string, string, string, string, number | null, number | null, 0 | 1 | 2, string, number, string, string, number | null, number | null];
+/** 画面に出す名前：正式な名前があればそれ */
+export const displayName = (r: Row) => r.official || r.name;
 
-export const toTuple = (r: Row): RowTuple => [r.id, r.name, r.industry, r.pref, r.capital, r.insured, r.listed, r.last, r.n1y, r.ex, r.cn, r.employees, r.sales];
+export type RowTuple = [string, string, string, string, number | null, number | null, 0 | 1 | 2, string, number, string, string, number | null, number | null, string, string];
+
+export const toTuple = (r: Row): RowTuple => [r.id, r.name, r.industry, r.pref, r.capital, r.insured, r.listed, r.last, r.n1y, r.ex, r.cn, r.employees, r.sales, r.official, r.form];
 
 export const fromTuple = (t: unknown[]): Row => ({
   id: String(t[0] ?? ''),
@@ -48,6 +55,8 @@ export const fromTuple = (t: unknown[]): Row => ({
   cn: String(t[10] ?? ''),
   employees: typeof t[11] === 'number' ? t[11] : null,
   sales: typeof t[12] === 'number' ? t[12] : null,
+  official: String(t[13] ?? ''),
+  form: String(t[14] ?? ''),
 });
 
 /** 上場の欄（PR TIMES の企業情報の「上場」）を3つに分ける */

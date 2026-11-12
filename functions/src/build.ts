@@ -4,6 +4,7 @@ import { CHUNK_BYTES, listedOf, toTuple, type Row, type RowTuple } from '../../s
 import { excludeReason } from '../../src/lib/exclude';
 import { prefOf } from '../../src/lib/pref';
 import { parseYen } from '../../src/lib/yen';
+import { legalFormOf } from '../../src/lib/legal';
 
 /**
  * 台帳（companies・companyArticles。prtimes-inbox が作る）を読むだけで、一覧用のまとめ（longlistIndex）を作り直す。
@@ -23,6 +24,9 @@ export function rowOf(id: string, c: Data): Row {
   const insured = (c.gbizInsured ?? {}) as Data;
   const finance = (c.gbizFinance ?? {}) as Data;
   const name = String(c.name ?? '');
+  // 正式な名前（法人番号で結びついた会社だけ）。PR TIMES の名前と同じなら持たない
+  const legalName = typeof gbiz.name === 'string' ? gbiz.name.trim() : '';
+  const official = legalName && legalName.normalize('NFKC') !== name.normalize('NFKC') ? legalName : '';
   const address = (profile.address as string | undefined) ?? (gbiz.location as string | undefined);
   const cn = String(c.corporateNumber ?? '');
   const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -37,10 +41,13 @@ export function rowOf(id: string, c: Data): Row {
     listed: listedOf(profile.listed as string | undefined),
     last: '',
     n1y: 0,
-    ex: excludeReason(name, address, Boolean(cn)) ?? '',
+    // 正式な名前（社団法人など）と PR TIMES の名前（PR事務局など）の、どちらかで外すと決まれば外す
+    ex: excludeReason(legalName || name, address, Boolean(cn)) ?? (legalName ? excludeReason(name, address, Boolean(cn)) : null) ?? '',
     cn,
     employees: num(gbiz.employees) ?? num(finance.employees),
     sales: num((finance.sales as Data | undefined)?.yen),
+    official,
+    form: legalFormOf(legalName || name),
   };
 }
 
@@ -97,7 +104,7 @@ export async function buildIndex(deps: { db: Firestore; now?: number; log?: (msg
   const now = deps.now ?? Date.now();
   const started = Date.now();
   const rows = new Map<string, Row>();
-  await scan(db, 'companies', ['name', 'profile', 'corporateNumber', 'gbiz.capital', 'gbiz.employees', 'gbiz.location', 'gbizInsured.total', 'gbizFinance.sales', 'gbizFinance.employees'], (id, c) => {
+  await scan(db, 'companies', ['name', 'profile', 'corporateNumber', 'gbiz.name', 'gbiz.capital', 'gbiz.employees', 'gbiz.location', 'gbizInsured.total', 'gbizFinance.sales', 'gbizFinance.employees'], (id, c) => {
     if (c.name) rows.set(id, rowOf(id, c));
   });
   await scan(db, 'companyArticles', ['a'], (id, d) => {

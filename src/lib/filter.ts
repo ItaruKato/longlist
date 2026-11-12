@@ -1,4 +1,4 @@
-import type { Row } from './rows';
+import { displayName, type Row } from './rows';
 import { regionOf } from './region';
 import { PREFS } from './pref';
 import { stageOf, type UserState } from './state';
@@ -9,6 +9,8 @@ export interface Filters {
   region: string;
   pref: string;
   industry: string;
+  /** 法人格（legal.ts の code。'none' は不明） */
+  form: string;
   size: string;
   cap: string;
   listed: '' | 'listed' | 'unlisted';
@@ -25,6 +27,7 @@ export const EMPTY_FILTERS: Filters = {
   region: '',
   pref: '',
   industry: '',
+  form: '',
   size: '',
   cap: '',
   listed: '',
@@ -94,9 +97,10 @@ export function applyFilters(rows: Row[], states: Map<string, UserState>, f: Fil
   return rows.filter((r) => {
     const s = states.get(r.id);
     if (isExcluded(r, s) !== (f.view === 'excluded')) return false;
-    if (q && !norm(r.name).includes(q)) return false;
+    if (q && !norm(r.name).includes(q) && !(r.official && norm(r.official).includes(q))) return false;
     if (f.pref ? r.pref !== f.pref : f.region && regionOf(r.pref) !== f.region) return false;
     if (f.industry && r.industry !== f.industry) return false;
+    if (f.form && (f.form === 'none' ? r.form !== '' : r.form !== f.form)) return false;
     if (size && !size.test(headcount(r))) return false;
     if (cap && !cap.test(r.capital)) return false;
     if (f.listed === 'listed' && r.listed !== 2) return false;
@@ -136,7 +140,7 @@ export function sortRows(rows: Row[], states: Map<string, UserState>, key: SortK
         return PROGRESS_RANK[stageOf(s)];
       case 'name':
         // 「株式会社」などを除いた名前で並べる
-        return r.name.normalize('NFKC').replace(LEGAL_FORM, '').trim() || r.name || null;
+        return displayName(r).normalize('NFKC').replace(LEGAL_FORM, '').trim() || displayName(r) || null;
       case 'industry':
         return r.industry || null;
       case 'pref': {

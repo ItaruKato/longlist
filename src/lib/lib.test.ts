@@ -3,6 +3,7 @@ import { parseYen, yenLabel } from './yen';
 import { excludeReason } from './exclude';
 import { ALL_PREFS, REGIONS, regionOf } from './region';
 import { fromTuple, listedOf, toTuple, type Row } from './rows';
+import { legalFormOf } from './legal';
 
 describe('parseYen', () => {
   it('日本の書き方を円にする', () => {
@@ -48,18 +49,53 @@ describe('excludeReason', () => {
     expect(excludeReason('経済産業省')).toBe('public');
     expect(excludeReason('Test Inc.', '1 Market St, San Francisco, CA, USA')).toBe('overseas');
     expect(excludeReason('テスト有限公司', '中国上海市浦東新区')).toBe('overseas');
+    // 略した書き方
+    expect(excludeReason('(一財)ブランド・マネージャー認定協会')).toBe('assoc');
+    expect(excludeReason('（一社）SAKE女の会')).toBe('assoc');
+    expect(excludeReason('(公財)日本テスト機構')).toBe('assoc');
+    expect(excludeReason('（公社）近畿圏不動産流通機構')).toBe('assoc');
+    expect(excludeReason('（特非）テスト')).toBe('npo');
+    // PR事務局・実行委員会・プロジェクト
+    expect(excludeReason('「#ポカリスナップ」PR事務局')).toBe('project');
+    expect(excludeReason('「Vivoo」 事務局（大塚製薬株式会社）')).toBe('project');
+    expect(excludeReason('「VIVANT IMMERSIVE MISSION」 実行委員会')).toBe('project');
+    expect(excludeReason('「ＳＴＯＰ！ヒートショック」プロジェクト')).toBe('project');
+    expect(excludeReason('「アーバンスポーツフェス IN 笠間 2026」広報事務局')).toBe('project');
+    expect(excludeReason('テストミュージックフェス')).toBe('project');
+    expect(excludeReason('テスト推進協議会')).toBe('project');
   });
   it('残す', () => {
     expect(excludeReason('株式会社テスト')).toBeNull();
     expect(excludeReason('医療法人社団テスト会')).toBeNull();
     expect(excludeReason('社会福祉法人テスト')).toBeNull();
     expect(excludeReason('株式会社大学ジャーナル')).toBeNull();
+    expect(excludeReason('株式会社プロジェクトテスト')).toBeNull();
+    expect(excludeReason('テストプロジェクト株式会社')).toBeNull();
+    // 法人格の書いていない個人の事業などは残す（国税庁の法人番号で確かめられるようになったら見直す）
+    expect(excludeReason('"allo?" 渡邊真弓写真事務所')).toBeNull();
+    expect(excludeReason('(N)ONE ATELIER')).toBeNull();
     expect(excludeReason('株式会社まちづくり三鷹市')).toBeNull();
     expect(excludeReason('テスト株式会社', '東京都渋谷区')).toBeNull();
     // 法人番号がある会社は海外としない（日本の法人）
     expect(excludeReason('Sample Japan K.K.', 'Tokyo', true)).toBeNull();
     // 都道府県が書かれていない日本の住所は海外にしない
     expect(excludeReason('株式会社テスト', '渋谷区道玄坂1-1')).toBeNull();
+  });
+});
+
+describe('legalFormOf', () => {
+  it('法人格を読む', () => {
+    expect(legalFormOf('株式会社テスト')).toBe('kk');
+    expect(legalFormOf('テスト株式会社')).toBe('kk');
+    expect(legalFormOf('㈱テスト')).toBe('kk');
+    expect(legalFormOf('（株）テスト')).toBe('kk');
+    expect(legalFormOf('テスト合同会社')).toBe('gk');
+    expect(legalFormOf('有限会社テスト')).toBe('yk');
+    expect(legalFormOf('医療法人社団テスト会')).toBe('other');
+    expect(legalFormOf('一般社団法人テスト')).toBe('other');
+    expect(legalFormOf('（一社）テスト')).toBe('other');
+    expect(legalFormOf('エキサイトホールディングス')).toBe('');
+    expect(legalFormOf('')).toBe('');
   });
 });
 
@@ -74,9 +110,9 @@ describe('region', () => {
 
 describe('rows', () => {
   it('行の形を行き来できる', () => {
-    const r: Row = { id: '12', name: '株式会社A', industry: '情報通信', pref: '東京都', capital: 1e7, insured: 25, listed: 1, last: '2026-11-01', n1y: 3, ex: '', cn: '1234567890123', employees: null, sales: null };
+    const r: Row = { id: '12', name: 'A', industry: '情報通信', pref: '東京都', capital: 1e7, insured: 25, listed: 1, last: '2026-11-01', n1y: 3, ex: '', cn: '1234567890123', employees: null, sales: null, official: '株式会社A', form: 'kk' };
     expect(fromTuple(JSON.parse(JSON.stringify(toTuple(r))))).toEqual(r);
-    expect(fromTuple(['9', 'B'])).toMatchObject({ id: '9', name: 'B', capital: null, listed: 0, n1y: 0 });
+    expect(fromTuple(['9', 'B'])).toMatchObject({ id: '9', name: 'B', capital: null, listed: 0, n1y: 0, official: '', form: '' });
   });
   it('上場の欄', () => {
     expect(listedOf('未上場')).toBe(1);

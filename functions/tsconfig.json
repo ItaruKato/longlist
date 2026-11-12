@@ -10,5 +10,5 @@
     "skipLibCheck": true,
     "sourceMap": true
   },
-  "include": ["src", "../src/lib/rows.ts", "../src/lib/exclude.ts", "../src/lib/pref.ts", "../src/lib/yen.ts"]
+  "include": ["src", "../src/lib/rows.ts", "../src/lib/exclude.ts", "../src/lib/pref.ts", "../src/lib/yen.ts", "../src/lib/legal.ts"]
 }

@@ -1,6 +1,7 @@
 import { CAP_BUCKETS, EMPTY_FILTERS, SIZE_BUCKETS, type Filters } from '../lib/filter';
 import { REGIONS } from '../lib/region';
 import { STAGES } from '../lib/state';
+import { LEGAL_FORMS } from '../lib/legal';
 
 export function FilterPanel({
   f,
@@ -42,6 +43,18 @@ export function FilterPanel({
           {industries.map((p) => (
             <option key={p}>{p}</option>
           ))}
+        </select>
+      </label>
+      <label>
+        <span>法人格</span>
+        <select value={f.form} onChange={(e) => upd('form', e.target.value)}>
+          <option value="">すべて</option>
+          {LEGAL_FORMS.map((x) => (
+            <option key={x.code} value={x.code}>
+              {x.label}
+            </option>
+          ))}
+          <option value="none">不明</option>
         </select>
       </label>
       <label>

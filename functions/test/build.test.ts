@@ -27,7 +27,18 @@ describe('rowOf', () => {
       cn: '1234567890123',
       employees: 30,
       sales: 1e9,
+      official: '',
+      form: 'kk',
     });
+  });
+  it('正式な名前（gBizINFO の法人名）があれば、それで法人格と除外を決める', () => {
+    expect(rowOf('5', { name: 'アイリックコーポレーション', gbiz: { name: '株式会社アイリックコーポレーション' } })).toMatchObject({ official: '株式会社アイリックコーポレーション', form: 'kk', ex: '' });
+    expect(rowOf('6', { name: 'テスト協会', gbiz: { name: '一般社団法人テスト協会' } })).toMatchObject({ form: 'other', ex: 'assoc' });
+    // 同じ名前なら正式な名前は持たない
+    expect(rowOf('7', { name: '株式会社B', gbiz: { name: '株式会社Ｂ' } })).toMatchObject({ official: '', form: 'kk' });
+    expect(rowOf('8', { name: 'エキサイトホールディングス' })).toMatchObject({ official: '', form: '' });
+    // PR TIMES の名前が PR事務局なら、正式な名前が会社でも外す
+    expect(rowOf('9', { name: '「テスト」PR事務局', gbiz: { name: '株式会社テスト' } })).toMatchObject({ ex: 'project' });
   });
   it('企業情報がまだの会社・除外する会社', () => {
     expect(rowOf('1', { name: '株式会社まだ' })).toMatchObject({ pref: '', capital: null, insured: null, listed: 0, ex: '' });
@@ -54,6 +65,8 @@ describe('articleStats', () => {
 describe('packRows', () => {
   it('上限を超えないように分け、元に戻せる', () => {
     const rows: Row[] = Array.from({ length: 3000 }, (_, i) => ({
+      official: '',
+      form: 'kk',
       id: String(i),
       name: `株式会社テスト${i}${'あ'.repeat(i % 7)}`,
       industry: '情報通信',

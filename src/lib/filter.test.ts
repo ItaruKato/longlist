@@ -5,7 +5,7 @@ import type { Row } from './rows';
 import type { UserState } from './state';
 
 const row = (id: string, p: Partial<Row> = {}): Row => ({
-  id, name: `株式会社${id}`, industry: '情報通信', pref: '東京都', capital: null, insured: null, listed: 1, last: '2026-11-01', n1y: 1, ex: '', cn: '', employees: null, sales: null, ...p,
+  id, name: `株式会社${id}`, industry: '情報通信', pref: '東京都', capital: null, insured: null, listed: 1, last: '2026-11-01', n1y: 1, ex: '', cn: '', employees: null, sales: null, official: '', form: 'kk', ...p,
 });
 const today = '2026-11-12';
 
@@ -42,6 +42,8 @@ describe('applyFilters', () => {
     expect(ids({ owner: '加藤' })).toEqual(['1']);
     expect(ids({ hasNext: true })).toEqual(['1']);
     expect(ids({ q: '株式会社3' })).toEqual(['3']);
+    expect(ids({ form: 'kk' })).toEqual(['1', '3']);
+    expect(ids({ form: 'none' })).toEqual([]);
   });
 });
 
@@ -54,6 +56,11 @@ describe('sortRows', () => {
     expect(sortRows(rows, states, 'capital').map((r) => r.id)).toEqual(['2', '1', '3']);
     expect(sortRows(rows, states, 'temp').map((r) => r.id)).toEqual(['3', '2', '1']);
     expect(sortRows(rows, states, 'next').map((r) => r.id)).toEqual(['3', '2', '1']);
+  });
+  it('正式な名前でも探せる', () => {
+    const rows = [row('1', { name: 'ワン', official: '株式会社ワン' }), row('2', { name: 'アイ合同会社' })];
+    expect(applyFilters(rows, new Map(), { ...EMPTY_FILTERS, q: '株式会社ワン' }, today).map((r) => r.id)).toEqual(['1']);
+    expect(applyFilters(rows, new Map(), { ...EMPTY_FILTERS, q: 'ワン' }, today).map((r) => r.id)).toEqual(['1']);
   });
   it('会社名は株式会社などを除いて並べる', () => {
     const rows = [row('1', { name: '株式会社ワン' }), row('2', { name: 'アイ合同会社' }), row('3', { name: '有限会社かきく' })];
@@ -75,7 +82,8 @@ describe('sortRows', () => {
 describe('toCsv', () => {
   it('Excel で開ける CSV', () => {
     const csv = toCsv([row('1', { name: '株式会社"A",B', capital: 1e7 })], new Map([['1', { memo: '1行目\n2行目' }]]), new Map([['1', { phone: '03-0000-0000' }]]));
-    expect(csv.startsWith('﻿会社名,')).toBe(true);
+    expect(csv.startsWith('﻿会社名,法人格,PR TIMES での名前,')).toBe(true);
+    expect(csv).toContain(',株式会社,');
     expect(csv).toContain('"株式会社""A"",B"');
     expect(csv).toContain('"1行目\n2行目"');
     expect(csv).toContain('03-0000-0000');

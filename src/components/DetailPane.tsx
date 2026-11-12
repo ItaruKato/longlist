@@ -4,7 +4,8 @@ import { loadDetail, saveState, type Detail } from '../data/firestore';
 import { EXCLUDE_LABEL, type ExcludeCode } from '../lib/exclude';
 import { isExcluded } from '../lib/filter';
 import { prtimesArticleUrl, prtimesCompanyUrl } from '../lib/csv';
-import type { Row } from '../lib/rows';
+import { displayName, type Row } from '../lib/rows';
+import { legalLabel } from '../lib/legal';
 import { STAGES, TEMPS, stageOf, type UserState } from '../lib/state';
 import { yenLabel } from '../lib/yen';
 
@@ -81,7 +82,7 @@ export function DetailPane({
         </button>
         <span className="savestate">{saving === 'saving' ? '保存中…' : saving === 'saved' ? '保存しました' : saving === 'failed' ? '保存できませんでした' : ''}</span>
       </div>
-      <h2>{row.name}</h2>
+      <h2>{displayName(row)}</h2>
       <div className="links">
         <a href={prtimesCompanyUrl(row.id)} target="_blank" rel="noopener noreferrer">PR TIMES</a>
         {hp && (
@@ -137,6 +138,9 @@ export function DetailPane({
             <dl className="info">
               {(
                 [
+                  ['正式な名前', row.official ? `${row.official}（法人番号の登録）` : row.cn ? `${row.name}（法人番号の登録と同じ）` : ''],
+                  ['法人格', row.form ? legalLabel(row.form) : '不明'],
+                  ['PR TIMES での名前', row.official ? row.name : ''],
                   ['代表者', String(p.representative ?? g.representative ?? '')],
                   ['所在地', String(p.address ?? g.location ?? '')],
                   ['業種', String(p.industry ?? '')],
@@ -165,7 +169,7 @@ export function DetailPane({
                   </div>
                 ))}
             </dl>
-            {(row.cn || ins || fin) && <p className="source">法人番号・加入者数・従業員数・財務・事業の概要：「Gビズインフォ」（経済産業省）をもとに作成</p>}
+            {(row.cn || ins || fin) && <p className="source">正式な名前・法人番号・加入者数・従業員数・財務・事業の概要：「Gビズインフォ」（経済産業省）をもとに作成</p>}
           </section>
 
           {detail.handoff.length > 0 && (

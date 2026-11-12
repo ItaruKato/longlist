@@ -3,7 +3,7 @@ import type { Firestore } from 'firebase/firestore';
 import { loadContacts, loadIndex, watchStates, type IndexMeta } from '../data/firestore';
 import { applyFilters, defaultDir, EMPTY_FILTERS, headcount, sortRows, SORTS, type Filters, type SortDir, type SortKey } from '../lib/filter';
 import { toCsv } from '../lib/csv';
-import type { Row } from '../lib/rows';
+import { displayName, type Row } from '../lib/rows';
 import { stageOf, type UserState } from '../lib/state';
 import { yenLabel } from '../lib/yen';
 import { FilterPanel } from './FilterPanel';
@@ -130,7 +130,9 @@ export function ListPage({ db, onSignOut }: { db: Firestore; onSignOut: () => vo
     const s = states.get(r.id);
     return (
       <button type="button" className={`trow${sel === r.id ? ' sel' : ''}`} onClick={() => setSel(r.id)}>
-        <span className="name">{r.name}</span>
+        <span className="name" title={r.official ? `PR TIMES での名前：${r.name}` : undefined}>
+          {displayName(r)}
+        </span>
         <span className="c-ind">{r.industry}</span>
         <span>{r.pref}</span>
         <span className="num">{headcount(r) !== null ? `${headcount(r)!.toLocaleString()}人` : ''}</span>
@@ -150,7 +152,7 @@ export function ListPage({ db, onSignOut }: { db: Firestore; onSignOut: () => vo
       <button type="button" className="ccard" onClick={() => setSel(r.id)}>
         <span className="cname">
           {tempOf(r.id) && <b className={`temp t${tempOf(r.id)}`}>{tempOf(r.id)}</b>}
-          {r.name}
+          {displayName(r)}
         </span>
         <span className="cmeta">{[r.industry, r.pref, hc !== null ? `${hc.toLocaleString()}人` : '', yenLabel(r.capital), LISTED[r.listed]].filter(Boolean).join(' · ')}</span>
         <span className="cmeta">
