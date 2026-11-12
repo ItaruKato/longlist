@@ -1,6 +1,6 @@
 import { gunzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
-import { articleStats, headcountOf, packRows, rowOf } from '../src/build';
+import { articleStats, headcountOf, needsTag, packRows, rowOf } from '../src/build';
 import { fromTuple, type Row } from '../../src/lib/rows';
 
 describe('rowOf', () => {
@@ -29,7 +29,13 @@ describe('rowOf', () => {
       sales: 1e9,
       official: '',
       form: 'kk',
+      tag: '',
+      tagSubs: [],
+      biz: '',
     });
+  });
+  it('業界タグ（台帳の companies.industryTags）を行に入れる', () => {
+    expect(rowOf('10', { name: '株式会社T', industryTags: { main: 'saas', subs: ['ai'], biz: 'btob', confidence: 'high' } })).toMatchObject({ tag: 'saas', tagSubs: ['ai'], biz: 'btob' });
   });
   it('正式な名前（gBizINFO の法人名）があれば、それで法人格と除外を決める', () => {
     expect(rowOf('5', { name: 'アイリックコーポレーション', gbiz: { name: '株式会社アイリックコーポレーション' } })).toMatchObject({ official: '株式会社アイリックコーポレーション', form: 'kk', ex: '' });
@@ -97,6 +103,9 @@ describe('packRows', () => {
     const rows: Row[] = Array.from({ length: 3000 }, (_, i) => ({
       official: '',
       form: 'kk',
+      tag: i % 2 ? 'saas' : '',
+      tagSubs: i % 3 ? ['ai'] : [],
+      biz: 'btob',
       id: String(i),
       name: `株式会社テスト${i}${'あ'.repeat(i % 7)}`,
       industry: '情報通信',
@@ -118,3 +127,23 @@ describe('packRows', () => {
     expect(back).toEqual(rows);
   });
 });
+
+describe('needsTag', () => {
+  it('タグのない・除外していない・頼んでいない会社を、最新記事が新しい順に', () => {
+    const base = rowOf('0', { name: 'x' });
+    const rows = [
+      { ...base, id: '1', last: '2026-10-01' },
+      { ...base, id: '2', last: '2026-11-01' },
+      { ...base, id: '3', last: '2026-11-05', tag: 'saas' },
+      { ...base, id: '4', last: '2026-11-06', ex: 'assoc' },
+      { ...base, id: '5', last: '2026-11-07', ex: 'assoc' },
+      { ...base, id: '6', last: '2026-11-08' },
+      { ...base, id: '7', last: '2026-11-09' },
+    ];
+    // 5 は手で一覧に戻した、6 は手で外した、7 は頼んである
+    const ids = needsTag(rows, new Map<string, boolean>([['5', false], ['6', true]]), new Set(['7']), 10);
+    expect(ids).toEqual(['5', '2', '1']);
+    expect(needsTag(rows, new Map(), new Set(), 1)).toEqual(['7']);
+  });
+});
+

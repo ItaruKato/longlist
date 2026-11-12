@@ -32,14 +32,19 @@ export interface Row {
   official: string;
   /** 法人格（src/lib/legal.ts の code。不明は空） */
   form: string;
+  /** 業界タグ（台帳の companies.industryTags。meta/industryTags の code）：メイン・サブ（2つまで） */
+  tag: string;
+  tagSubs: string[];
+  /** BtoB／BtoC：btob・btoc・both（まだなら空） */
+  biz: string;
 }
 
 /** 画面に出す名前：正式な名前があればそれ */
 export const displayName = (r: Row) => r.official || r.name;
 
-export type RowTuple = [string, string, string, string, number | null, number | null, 0 | 1 | 2, string, number, string, string, number | null, number | null, string, string];
+export type RowTuple = [string, string, string, string, number | null, number | null, 0 | 1 | 2, string, number, string, string, number | null, number | null, string, string, string, string, string];
 
-export const toTuple = (r: Row): RowTuple => [r.id, r.name, r.industry, r.pref, r.capital, r.insured, r.listed, r.last, r.n1y, r.ex, r.cn, r.employees, r.sales, r.official, r.form];
+export const toTuple = (r: Row): RowTuple => [r.id, r.name, r.industry, r.pref, r.capital, r.insured, r.listed, r.last, r.n1y, r.ex, r.cn, r.employees, r.sales, r.official, r.form, r.tag, r.tagSubs.join(','), r.biz];
 
 export const fromTuple = (t: unknown[]): Row => ({
   id: String(t[0] ?? ''),
@@ -57,6 +62,9 @@ export const fromTuple = (t: unknown[]): Row => ({
   sales: typeof t[12] === 'number' ? t[12] : null,
   official: String(t[13] ?? ''),
   form: String(t[14] ?? ''),
+  tag: String(t[15] ?? ''),
+  tagSubs: t[16] ? String(t[16]).split(',').filter(Boolean) : [],
+  biz: String(t[17] ?? ''),
 });
 
 /** 上場の欄（PR TIMES の企業情報の「上場」）を3つに分ける */

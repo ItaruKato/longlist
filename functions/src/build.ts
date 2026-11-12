@@ -1,5 +1,5 @@
 import { gzipSync } from 'node:zlib';
-import { FieldPath, type Firestore } from 'firebase-admin/firestore';
+import { FieldPath, FieldValue, type Firestore } from 'firebase-admin/firestore';
 import { CHUNK_BYTES, listedOf, toTuple, type Row, type RowTuple } from '../../src/lib/rows';
 import { excludeReason } from '../../src/lib/exclude';
 import { prefOf } from '../../src/lib/pref';
@@ -9,8 +9,14 @@ import { legalFormOf } from '../../src/lib/legal';
 /**
  * 台帳（companies・companyArticles。prtimes-inbox が作る）を読むだけで、一覧用のまとめ（longlistIndex）を作り直す。
  * まとめは1行1社の配列を JSON にして gzip し、1MiB に収まるように分けて保存する。
- * 書き込み先は longlistIndex/{番号} と longlistMeta/index だけ。
+ * 書き込み先は longlistIndex/{番号} と longlistMeta/index。
+ * あわせて、まだ業界タグのない会社（除外を除く）を台帳の業界タグの処理に頼む（industryQueue。決めた AI で、台帳に書く）。
  */
+
+/** 全社の業界タグに使う AI（2026-11-12 本人が決定） */
+export const ADOPTED_MODEL = 'opus';
+/** 1回（6時間ごと）に頼む数の上限。台帳は5分ごとに80社（6時間で約5,700社）処理する */
+export const ENQUEUE_PER_RUN = 5000;
 
 const PAGE = 1000;
 const YEAR_MS = 365 * 86400e3;
@@ -51,6 +57,9 @@ export function rowOf(id: string, c: Data): Row {
     sales: num((finance.sales as Data | undefined)?.yen) ?? parseYen(webValue('sales')),
     official,
     form: legalFormOf(legalName || name),
+    tag: typeof (c.industryTags as Data | undefined)?.main === 'string' ? String((c.industryTags as Data).main) : '',
+    tagSubs: Array.isArray((c.industryTags as Data | undefined)?.subs) ? ((c.industryTags as Data).subs as unknown[]).map(String).slice(0, 2) : [],
+    biz: typeof (c.industryTags as Data | undefined)?.biz === 'string' ? String((c.industryTags as Data).biz) : '',
   };
 }
 
@@ -109,12 +118,38 @@ async function scan(db: Firestore, collection: string, fields: string[], each: (
   }
 }
 
+/** まだ業界タグのない会社を選ぶ（除外した会社・すでに頼んでいる会社は除く。最新記事が新しい会社から） */
+export function needsTag(list: Row[], exclude: Map<string, boolean | null | undefined>, queued: Set<string>, limit: number): string[] {
+  return list
+    .filter((r) => {
+      const x = exclude.get(r.id);
+      const excluded = x === true || (x !== false && r.ex !== '');
+      return !r.tag && !excluded && !queued.has(r.id);
+    })
+    .sort((a, b) => (a.last === b.last ? 0 : a.last < b.last ? 1 : -1))
+    .slice(0, limit)
+    .map((r) => r.id);
+}
+
+async function enqueueTags(db: Firestore, list: Row[]): Promise<number> {
+  const exclude = new Map((await db.collection('longlist').select('exclude').get()).docs.map((d) => [d.id, d.get('exclude') as boolean | null | undefined]));
+  const queued = new Set((await db.collection('industryQueue').select().get()).docs.map((d) => d.id));
+  const ids = needsTag(list, exclude, queued, ENQUEUE_PER_RUN);
+  for (let i = 0; i < ids.length; i += 400) {
+    const b = db.batch();
+    for (const id of ids.slice(i, i + 400))
+      b.set(db.collection('industryQueue').doc(id), { models: FieldValue.arrayUnion(ADOPTED_MODEL), apply: ADOPTED_MODEL, at: FieldValue.serverTimestamp(), by: 'longlist' }, { merge: true });
+    await b.commit();
+  }
+  return ids.length;
+}
+
 export async function buildIndex(deps: { db: Firestore; now?: number; log?: (msg: string, data?: Record<string, unknown>) => void }) {
   const { db } = deps;
   const now = deps.now ?? Date.now();
   const started = Date.now();
   const rows = new Map<string, Row>();
-  await scan(db, 'companies', ['name', 'profile', 'corporateNumber', 'gbiz.name', 'gbiz.capital', 'gbiz.employees', 'gbiz.location', 'gbizInsured.total', 'gbizFinance.sales', 'gbizFinance.employees', 'web.officialName', 'web.employees', 'web.capital', 'web.sales'], (id, c) => {
+  await scan(db, 'companies', ['name', 'profile', 'corporateNumber', 'gbiz.name', 'gbiz.capital', 'gbiz.employees', 'gbiz.location', 'gbizInsured.total', 'gbizFinance.sales', 'gbizFinance.employees', 'web.officialName', 'web.employees', 'web.capital', 'web.sales', 'industryTags.main', 'industryTags.subs', 'industryTags.biz'], (id, c) => {
     if (c.name) rows.set(id, rowOf(id, c));
   });
   await scan(db, 'companyArticles', ['a'], (id, d) => {
@@ -141,7 +176,8 @@ export async function buildIndex(deps: { db: Firestore; now?: number; log?: (msg
     tookMs: Date.now() - started,
   });
   for (const d of old.docs) if (Number(d.id) >= chunks.length) await d.ref.delete();
-  const result = { rows: list.length, excluded, chunks: chunks.length };
+  const queued = await enqueueTags(db, list);
+  const result = { rows: list.length, excluded, chunks: chunks.length, queued, tagged: list.filter((r) => r.tag).length };
   deps.log?.('longlist index built', result);
   return result;
 }

@@ -20,11 +20,13 @@ export function DetailPane({
   row,
   state,
   onClose,
+  tagLabel = (c: string) => c,
 }: {
   db: Firestore;
   row: Row;
   state: UserState | undefined;
   onClose: () => void;
+  tagLabel?: (code: string) => string;
 }) {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -69,6 +71,7 @@ export function DetailPane({
   const c = (detail?.company ?? {}) as Data;
   const p = (c.profile ?? {}) as Data;
   const g = (c.gbiz ?? {}) as Data;
+  const tags = c.industryTags as { main?: string; subs?: string[]; biz?: string; confidence?: string; reason?: string; at?: string } | undefined;
   const ins = c.gbizInsured as { total: number; offices: number; updated?: string } | undefined;
   const fin = c.gbizFinance as Data | undefined;
   const money = (k: string) => yenLabel(((fin?.[k] as Data | undefined)?.yen as number | undefined) ?? null);
@@ -156,7 +159,10 @@ export function DetailPane({
                   ['PR TIMES での名前', row.official ? row.name : ''],
                   ['代表者', String(p.representative ?? g.representative ?? '')],
                   ['所在地', String(p.address ?? g.location ?? '')],
-                  ['業種', String(p.industry ?? '')],
+                  ['業界タグ', tags?.main ? [tagLabel(tags.main), ...(tags.subs ?? []).map((s) => `＋${tagLabel(s)}`)].join(' ') : ''],
+                  ['BtoB／BtoC', tags?.biz ? ({ btob: 'BtoB', btoc: 'BtoC', both: 'BtoB・BtoC' } as Record<string, string>)[tags.biz] ?? tags.biz : ''],
+                  ['タグの理由（AI）', tags?.reason ? `${tags.reason}（確かさ：${({ high: '確か', mid: 'だいたい', low: '迷い' } as Record<string, string>)[tags.confidence ?? ''] ?? ''}）` : ''],
+                  ['PR TIMES の業種', String(p.industry ?? '')],
                   ['資本金', yenLabel(row.capital) || String(p.capital ?? '')],
                   ['設立', String(p.established ?? g.established ?? '')],
                   ['上場', String(p.listed ?? '')],

@@ -18,19 +18,22 @@ const cell = (v: unknown) => {
 };
 
 export const CSV_HEADER = [
-  '会社名', '法人格', 'PR TIMES での名前', '法人番号', '業界', '都道府県', '地方', '資本金（円）', '厚生年金の加入者数', '従業員数', '売上高（円）', '上場',
+  '会社名', '法人格', 'PR TIMES での名前', '法人番号', '業界タグ', '業界タグ（サブ）', 'BtoB/BtoC', 'PR TIMES の業種', '都道府県', '地方', '資本金（円）', '厚生年金の加入者数', '従業員数', '売上高（円）', '上場',
   '最新記事', '記事数（1年）', '温度感', '進捗', '次にやること', '次の日付', '担当', 'メモ', '代表者', '代表電話', 'HP', 'PR TIMES',
 ];
 
 /** Excel で文字化けしないよう、先頭に BOM を付ける */
-export function toCsv(rows: Row[], states: Map<string, UserState>, contacts: Map<string, Contact>): string {
+const BIZ: Record<string, string> = { btob: 'BtoB', btoc: 'BtoC', both: 'BtoB・BtoC' };
+
+/** tagLabel：業界タグの code から名前（meta/industryTags） */
+export function toCsv(rows: Row[], states: Map<string, UserState>, contacts: Map<string, Contact>, tagLabel: (code: string) => string = (c) => c): string {
   const lines = [CSV_HEADER.join(',')];
   for (const r of rows) {
     const s = states.get(r.id);
     const c = contacts.get(r.id) ?? {};
     lines.push(
       [
-        displayName(r), r.form ? legalLabel(r.form) : '', r.name, r.cn, r.industry, r.pref, regionOf(r.pref) ?? '', r.capital, r.insured, r.employees, r.sales, LISTED[r.listed],
+        displayName(r), r.form ? legalLabel(r.form) : '', r.name, r.cn, r.tag ? tagLabel(r.tag) : '', r.tagSubs.map(tagLabel).join('・'), BIZ[r.biz] ?? '', r.industry, r.pref, regionOf(r.pref) ?? '', r.capital, r.insured, r.employees, r.sales, LISTED[r.listed],
         r.last, r.n1y, s?.temperature ?? '', stageOf(s), s?.nextText ?? '', s?.nextDate ?? '', s?.owner ?? '', s?.memo ?? '',
         c.representative ?? '', c.phone ?? '', c.url ?? '', prtimesCompanyUrl(r.id),
       ]

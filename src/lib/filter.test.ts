@@ -5,7 +5,7 @@ import type { Row } from './rows';
 import type { UserState } from './state';
 
 const row = (id: string, p: Partial<Row> = {}): Row => ({
-  id, name: `株式会社${id}`, industry: '情報通信', pref: '東京都', capital: null, insured: null, listed: 1, last: '2026-11-01', n1y: 1, ex: '', cn: '', employees: null, sales: null, official: '', form: 'kk', ...p,
+  id, name: `株式会社${id}`, industry: '情報通信', pref: '東京都', capital: null, insured: null, listed: 1, last: '2026-11-01', n1y: 1, ex: '', cn: '', employees: null, sales: null, official: '', form: 'kk', tag: '', tagSubs: [], biz: '', ...p,
 });
 const today = '2026-11-12';
 
@@ -44,6 +44,7 @@ describe('applyFilters', () => {
     expect(ids({ q: '株式会社3' })).toEqual(['3']);
     expect(ids({ form: 'kk' })).toEqual(['1', '3']);
     expect(ids({ form: 'none' })).toEqual([]);
+    expect(ids({ tag: 'none' })).toEqual(['1', '3']);
   });
 });
 
@@ -75,6 +76,16 @@ describe('sortRows', () => {
     expect(sortRows(rows, none, 'pref', 'asc', { key: 'size', dir: 'asc' }).map((r) => r.id)).toEqual(['5', '2', '4', '1', '3']);
     // 1番目と同じ列を選んでも壊れない
     expect(sortRows(rows, none, 'size', 'desc', { key: 'size', dir: 'asc' }).map((r) => r.id)).toEqual(['3', '2', '1', '5', '4']);
+  });
+  it('業界タグ（メインかサブ）と BtoB／BtoC', () => {
+    const rows = [row('1', { tag: 'saas', tagSubs: ['ai'], biz: 'btob' }), row('2', { tag: 'ai', biz: 'both' }), row('3', { tag: 'ec', biz: 'btoc' }), row('4')];
+    const f = (x: Partial<typeof EMPTY_FILTERS>) => applyFilters(rows, new Map(), { ...EMPTY_FILTERS, ...x }, today).map((r) => r.id);
+    expect(f({ tag: 'ai' })).toEqual(['1', '2']);
+    expect(f({ tag: 'none' })).toEqual(['4']);
+    expect(f({ biz: 'btob' })).toEqual(['1', '2']);
+    expect(f({ biz: 'btoc' })).toEqual(['2', '3']);
+    expect(f({ biz: 'both' })).toEqual(['2']);
+    expect(f({ biz: 'none' })).toEqual(['4']);
   });
   it('会社名は株式会社などを除いて並べる', () => {
     const rows = [row('1', { name: '株式会社ワン' }), row('2', { name: 'アイ合同会社' }), row('3', { name: '有限会社かきく' })];

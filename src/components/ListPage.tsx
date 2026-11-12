@@ -1,6 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import type { Firestore } from 'firebase/firestore';
-import { loadContacts, loadIndex, watchStates, type IndexMeta } from '../data/firestore';
+import { loadContacts, loadIndex, loadTagDefs, watchStates, type IndexMeta, type TagDef } from '../data/firestore';
 import { applyFilters, defaultDir, EMPTY_FILTERS, headcount, sortRows, SORTS, type Filters, type SortDir, type SortKey, type SortSpec } from '../lib/filter';
 import { toCsv } from '../lib/csv';
 import { displayName, type Row } from '../lib/rows';
@@ -83,6 +83,7 @@ export function ListPage({ db, onSignOut }: { db: Firestore; onSignOut: () => vo
   const [sel, setSel] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState<'list' | 'trial'>('list');
+  const [tagDefs, setTagDefs] = useState<TagDef[]>([]);
   const [csv, setCsv] = useState<string | null>(null);
   const f = view.f;
   const setF = (nf: Filters) => {
@@ -115,12 +116,19 @@ export function ListPage({ db, onSignOut }: { db: Firestore; onSignOut: () => vo
       },
       (e) => setErr(String((e as { code?: string }).code ?? e)),
     );
+    loadTagDefs(db).then(setTagDefs, () => {});
     return watchStates(db, setStates, (e) => setErr(String((e as { code?: string }).code ?? e)));
   }, [db]);
 
   const q = useDeferredValue(f.q);
   const today = todayJst();
   const all = useMemo(() => rows ?? [], [rows]);
+  const tagLabel = useMemo(() => {
+    const m = new Map(tagDefs.map((t) => [t.code, t.label]));
+    return (code: string) => m.get(code) ?? code;
+  }, [tagDefs]);
+  /** 画面に出す業界：業界タグがあればそれ、なければ PR TIMES の業種 */
+  const industryOf = (r: Row) => (r.tag ? tagLabel(r.tag) : r.industry);
   const industries = useMemo(() => [...new Set(all.map((r) => r.industry).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ja')), [all]);
   const owners = useMemo(() => [...new Set([...states.values()].map((s) => s.owner).filter((o): o is string => Boolean(o)))].sort(), [states]);
   const shown = useMemo(() => sortRows(applyFilters(all, states, { ...f, q }, today), states, view.sort, view.dir, view.then), [all, states, f, q, today, view.sort, view.dir, view.then]);
@@ -134,7 +142,7 @@ export function ListPage({ db, onSignOut }: { db: Firestore; onSignOut: () => vo
     try {
       setCsv('0');
       const contacts = await loadContacts(db, shown.map((r) => r.id), (n) => setCsv(String(n)));
-      const blob = new Blob([toCsv(shown, states, contacts)], { type: 'text/csv;charset=utf-8' });
+      const blob = new Blob([toCsv(shown, states, contacts, tagLabel)], { type: 'text/csv;charset=utf-8' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = `longlist-${today}.csv`;
@@ -155,7 +163,9 @@ export function ListPage({ db, onSignOut }: { db: Firestore; onSignOut: () => vo
         <span className="name" title={r.official ? `PR TIMES での名前：${r.name}` : undefined}>
           {displayName(r)}
         </span>
-        <span className="c-ind">{r.industry}</span>
+        <span className="c-ind" title={r.tag ? [tagLabel(r.tag), ...r.tagSubs.map(tagLabel)].join('・') : r.industry ? `PR TIMES の業種：${r.industry}` : undefined}>
+          {industryOf(r)}
+        </span>
         <span>{r.pref}</span>
         <span className="num">{headcount(r) !== null ? `${headcount(r)!.toLocaleString()}人` : ''}</span>
         <span className="num">{yenLabel(r.capital)}</span>
@@ -176,7 +186,7 @@ export function ListPage({ db, onSignOut }: { db: Firestore; onSignOut: () => vo
           {tempOf(r.id) && <b className={`temp t${tempOf(r.id)}`}>{tempOf(r.id)}</b>}
           {displayName(r)}
         </span>
-        <span className="cmeta">{[r.industry, r.pref, hc !== null ? `${hc.toLocaleString()}人` : '', yenLabel(r.capital), LISTED[r.listed]].filter(Boolean).join(' · ')}</span>
+        <span className="cmeta">{[industryOf(r), r.pref, hc !== null ? `${hc.toLocaleString()}人` : '', yenLabel(r.capital), LISTED[r.listed]].filter(Boolean).join(' · ')}</span>
         <span className="cmeta">
           {r.last ? `最新 ${short(r.last)}・1年 ${r.n1y}件` : '記事なし'}
           {stageOf(s) !== '未着手' ? `・${stageOf(s)}` : ''}
@@ -289,7 +299,7 @@ export function ListPage({ db, onSignOut }: { db: Firestore; onSignOut: () => vo
       </header>
       {wide && (
         <aside className="side">
-          <FilterPanel f={f} set={setF} industries={industries} owners={owners} />
+          <FilterPanel f={f} set={setF} industries={industries} owners={owners} tagDefs={tagDefs} />
           <p className="foot">
             {meta ? `まとめ：${new Date(meta.builtAt).toLocaleString('ja-JP')}` : ''}
             <br />
@@ -303,11 +313,11 @@ export function ListPage({ db, onSignOut }: { db: Firestore; onSignOut: () => vo
       )}
       <main className="list">{page === 'trial' ? <TrialPage db={db} rows={all} states={states} onOpen={setSel} selected={sel} /> : list}</main>
       {wide ? (
-        <section className="pane">{selRow ? <DetailPane db={db} row={selRow} state={states.get(selRow.id)} onClose={() => setSel(null)} /> : <p className="muted pad">会社を選ぶと、ここに詳しい情報が出ます。</p>}</section>
+        <section className="pane">{selRow ? <DetailPane db={db} row={selRow} state={states.get(selRow.id)} onClose={() => setSel(null)} tagLabel={tagLabel} /> : <p className="muted pad">会社を選ぶと、ここに詳しい情報が出ます。</p>}</section>
       ) : (
         selRow && (
           <div className="sheet">
-            <DetailPane db={db} row={selRow} state={states.get(selRow.id)} onClose={() => setSel(null)} />
+            <DetailPane db={db} row={selRow} state={states.get(selRow.id)} onClose={() => setSel(null)} tagLabel={tagLabel} />
           </div>
         )
       )}
@@ -318,7 +328,7 @@ export function ListPage({ db, onSignOut }: { db: Firestore; onSignOut: () => vo
               ← {shown.length.toLocaleString()}社を見る
             </button>
           </div>
-          <FilterPanel f={f} set={setF} industries={industries} owners={owners} />
+          <FilterPanel f={f} set={setF} industries={industries} owners={owners} tagDefs={tagDefs} />
         </div>
       )}
     </div>

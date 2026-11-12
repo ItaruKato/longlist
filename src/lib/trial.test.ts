@@ -3,7 +3,7 @@ import { agreementOf, pickSample, summarize } from './trial';
 import type { Row } from './rows';
 
 const row = (id: string, p: Partial<Row> = {}): Row => ({
-  id, name: id, industry: '', pref: '', capital: null, insured: null, listed: 0, last: '', n1y: 1, ex: '', cn: '', employees: null, sales: null, official: '', form: '', ...p,
+  id, name: id, industry: '', pref: '', capital: null, insured: null, listed: 0, last: '', n1y: 1, ex: '', cn: '', employees: null, sales: null, official: '', form: '', tag: '', tagSubs: [], biz: '', ...p,
 });
 
 describe('pickSample', () => {

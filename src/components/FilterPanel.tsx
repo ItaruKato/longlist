@@ -8,11 +8,13 @@ export function FilterPanel({
   set,
   industries,
   owners,
+  tagDefs,
 }: {
   f: Filters;
   set: (f: Filters) => void;
   industries: string[];
   owners: string[];
+  tagDefs: { code: string; label: string; group: string }[];
 }) {
   const upd = <K extends keyof Filters>(k: K, v: Filters[K]) => set({ ...f, [k]: v });
   const prefs = f.region ? (REGIONS.find((r) => r.name === f.region)?.prefs ?? []) : REGIONS.flatMap((r) => r.prefs);
@@ -37,7 +39,35 @@ export function FilterPanel({
         </select>
       </label>
       <label>
-        <span>業界（PR TIMES の業種）</span>
+        <span>業界タグ（メインかサブ）</span>
+        <select value={f.tag} onChange={(e) => upd('tag', e.target.value)}>
+          <option value="">すべて</option>
+          {[...new Set(tagDefs.map((t) => t.group))].map((g) => (
+            <optgroup key={g} label={g}>
+              {tagDefs
+                .filter((t) => t.group === g)
+                .map((t) => (
+                  <option key={t.code} value={t.code}>
+                    {t.label}
+                  </option>
+                ))}
+            </optgroup>
+          ))}
+          <option value="none">まだ付いていない</option>
+        </select>
+      </label>
+      <label>
+        <span>BtoB／BtoC</span>
+        <select value={f.biz} onChange={(e) => upd('biz', e.target.value as Filters['biz'])}>
+          <option value="">すべて</option>
+          <option value="btob">BtoB（両方も含む）</option>
+          <option value="btoc">BtoC（両方も含む）</option>
+          <option value="both">両方</option>
+          <option value="none">まだ付いていない</option>
+        </select>
+      </label>
+      <label>
+        <span>PR TIMES の業種</span>
         <select value={f.industry} onChange={(e) => upd('industry', e.target.value)}>
           <option value="">すべて</option>
           {industries.map((p) => (

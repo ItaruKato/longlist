@@ -110,9 +110,9 @@ describe('region', () => {
 
 describe('rows', () => {
   it('行の形を行き来できる', () => {
-    const r: Row = { id: '12', name: 'A', industry: '情報通信', pref: '東京都', capital: 1e7, insured: 25, listed: 1, last: '2026-11-01', n1y: 3, ex: '', cn: '1234567890123', employees: null, sales: null, official: '株式会社A', form: 'kk' };
+    const r: Row = { id: '12', name: 'A', industry: '情報通信', pref: '東京都', capital: 1e7, insured: 25, listed: 1, last: '2026-11-01', n1y: 3, ex: '', cn: '1234567890123', employees: null, sales: null, official: '株式会社A', form: 'kk', tag: 'saas', tagSubs: ['ai', 'hr'], biz: 'btob' };
     expect(fromTuple(JSON.parse(JSON.stringify(toTuple(r))))).toEqual(r);
-    expect(fromTuple(['9', 'B'])).toMatchObject({ id: '9', name: 'B', capital: null, listed: 0, n1y: 0, official: '', form: '' });
+    expect(fromTuple(['9', 'B'])).toMatchObject({ id: '9', name: 'B', capital: null, listed: 0, n1y: 0, official: '', form: '', tag: '', tagSubs: [], biz: '' });
   });
   it('上場の欄', () => {
     expect(listedOf('未上場')).toBe(1);

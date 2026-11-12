@@ -9,6 +9,10 @@ export interface Filters {
   region: string;
   pref: string;
   industry: string;
+  /** 業界タグ（code。メインかサブに入っていれば） */
+  tag: string;
+  /** BtoB／BtoC（btob は「両方」も含む。none はまだ） */
+  biz: '' | 'btob' | 'btoc' | 'both' | 'none';
   /** 法人格（legal.ts の code。'none' は不明） */
   form: string;
   size: string;
@@ -27,6 +31,8 @@ export const EMPTY_FILTERS: Filters = {
   region: '',
   pref: '',
   industry: '',
+  tag: '',
+  biz: '',
   form: '',
   size: '',
   cap: '',
@@ -100,6 +106,8 @@ export function applyFilters(rows: Row[], states: Map<string, UserState>, f: Fil
     if (q && !norm(r.name).includes(q) && !(r.official && norm(r.official).includes(q))) return false;
     if (f.pref ? r.pref !== f.pref : f.region && regionOf(r.pref) !== f.region) return false;
     if (f.industry && r.industry !== f.industry) return false;
+    if (f.tag && (f.tag === 'none' ? r.tag !== '' : r.tag !== f.tag && !r.tagSubs.includes(f.tag))) return false;
+    if (f.biz && (f.biz === 'none' ? r.biz !== '' : f.biz === 'both' ? r.biz !== 'both' : r.biz !== f.biz && r.biz !== 'both')) return false;
     if (f.form && (f.form === 'none' ? r.form !== '' : r.form !== f.form)) return false;
     if (size && !size.test(headcount(r))) return false;
     if (cap && !cap.test(r.capital)) return false;
@@ -145,7 +153,8 @@ function valueOf(key: SortKey, r: Row, s: UserState | undefined): number | strin
       // 「株式会社」などを除いた名前で並べる
       return displayName(r).normalize('NFKC').replace(LEGAL_FORM, '').trim() || displayName(r) || null;
     case 'industry':
-      return r.industry || null;
+      // 業界タグのある会社を先に（タグの code の順）、なければ PR TIMES の業種
+      return r.tag ? `0${r.tag}` : r.industry ? `1${r.industry}` : null;
     case 'pref': {
       const i = PREFS.indexOf(r.pref as (typeof PREFS)[number]);
       return i >= 0 ? i : null;
