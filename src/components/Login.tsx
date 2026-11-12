@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut, type Auth, type User } from 'firebase/auth';
 import { OWNER_EMAIL } from '../firebase';
+import { versionLabel } from '../lib/version';
 
 export function Login({ auth, wrongUser }: { auth: Auth; wrongUser: User | null }) {
   const [err, setErr] = useState<string | null>(null);
@@ -40,6 +41,7 @@ export function Login({ auth, wrongUser }: { auth: Auth; wrongUser: User | null 
           </>
         )}
         {err && <p className="err">{err}</p>}
+        <small className="ver">{versionLabel()}</small>
       </div>
     </div>
   );

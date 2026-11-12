@@ -10,6 +10,7 @@ import { FilterPanel } from './FilterPanel';
 import { DetailPane } from './DetailPane';
 import { VirtualList } from './VirtualList';
 import { TrialPage } from './TrialPage';
+import { versionLabel } from '../lib/version';
 
 const KEY = 'longlist.view.v1';
 interface View {
@@ -226,7 +227,9 @@ export function ListPage({ db, onSignOut }: { db: Firestore; onSignOut: () => vo
     <div className={`app${wide ? ' wide' : ''}`}>
       <header className="top">
         <div className="toprow">
-          <b className="brand">Long List</b>
+          <b className="brand">
+            Long List <small className="ver">{versionLabel()}</small>
+          </b>
           <div className="tabs">
             <button type="button" className={page === 'list' && f.view === 'list' ? 'on' : ''} onClick={() => (setPage('list'), setF({ ...f, view: 'list' }))}>
               一覧
