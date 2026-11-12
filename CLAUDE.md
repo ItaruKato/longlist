@@ -6,6 +6,7 @@
 - 素人。やることは手順を分かりやすく1つずつ。決めることは質問形式で聞く
 - 権限の変更（IAM・Workload Identity・承認済みドメイン）は自分で付けず、Cloud Shell に貼るだけのコマンドで案内する
 - 秘密情報をチャットに貼らせない（Secret Manager だけ）
+- このリポジトリの本番（prtimes-longlist）には、テストとビルドが通れば Claude の判断で main に push して出してよい（2026-11-12 本人）。prtimes-inbox を直すときは共有の決まり4のとおり
 
 ## 共有の決まり（必ず守る）
 1. Firestore のルール・索引は `ItaruKato/prtimes-inbox` の `firestore.rules`・`firestore.indexes.json` だけで管理する。Long List のコレクションのルール・索引もそちらに足す。このリポジトリから Firestore をデプロイしない
