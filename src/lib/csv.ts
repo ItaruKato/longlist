@@ -38,7 +38,7 @@ export function toCsv(rows: Row[], states: Map<string, UserState>, contacts: Map
         .join(','),
     );
   }
-  lines.push(cell('正式な会社名・法人番号・加入者数・従業員数・売上高の出典：「Gビズインフォ」（経済産業省）をもとに作成'));
+  lines.push(cell('正式な会社名・法人番号・加入者数・従業員数・売上高の出典：「Gビズインフォ」（経済産業省）をもとに作成。ない会社は会社 HP の会社概要（AI が読み取り）'));
   return '﻿' + lines.join('\r\n') + '\r\n';
 }
 

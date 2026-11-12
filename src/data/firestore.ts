@@ -106,6 +106,14 @@ export async function loadDetail(db: Firestore, id: string): Promise<Detail> {
   return { company: c.exists() ? c.data() : null, articles, handoff };
 }
 
+/**
+ * 会社 HP の読み込みを台帳に頼む（webQueue/{会社ID}）。読むのは台帳側の companyWebSweep（5分ごとに少しずつ）。
+ * Long List は HP を自分で読みに行かない。redo は、前に読んでいても読み直す。
+ */
+export async function requestWeb(db: Firestore, id: string, redo = false) {
+  await setDoc(doc(db, 'webQueue', id), { at: serverTimestamp(), by: 'longlist', ...(redo ? { redo: true } : {}) }, { merge: true });
+}
+
 /** CSV 用に、代表者・代表電話・HP を読む（30社ずつ、8つ並べて） */
 export async function loadContacts(db: Firestore, ids: string[], onProgress?: (done: number) => void): Promise<Map<string, Contact>> {
   const out = new Map<string, Contact>();

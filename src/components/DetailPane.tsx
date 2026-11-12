@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Firestore } from 'firebase/firestore';
-import { loadDetail, saveState, type Detail } from '../data/firestore';
+import { loadDetail, requestWeb, saveState, type Detail } from '../data/firestore';
 import { EXCLUDE_LABEL, type ExcludeCode } from '../lib/exclude';
 import { isExcluded } from '../lib/filter';
 import { prtimesArticleUrl, prtimesCompanyUrl } from '../lib/csv';
@@ -29,6 +29,7 @@ export function DetailPane({
   const [detail, setDetail] = useState<Detail | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState<'' | 'saving' | 'saved' | 'failed'>('');
+  const [webAsked, setWebAsked] = useState<'' | 'asking' | 'asked' | 'failed'>('');
   const [memo, setMemo] = useState(state?.memo ?? '');
   const [nextText, setNextText] = useState(state?.nextText ?? '');
   const [owner, setOwner] = useState(state?.owner ?? '');
@@ -37,6 +38,7 @@ export function DetailPane({
     setDetail(null);
     setErr(null);
     setSaving('');
+    setWebAsked('');
     let alive = true;
     loadDetail(db, row.id).then(
       (d) => alive && setDetail(d),
@@ -73,6 +75,17 @@ export function DetailPane({
   const phone = typeof p.phone === 'string' ? p.phone : '';
   const hp = safeUrl(p.url) ?? safeUrl(g.url);
   const excluded = isExcluded(row, state);
+  const web = c.web as (Data & { state?: string; url?: string; at?: string }) | undefined;
+  const webItem = (k: string) => web?.[k] as { value?: string; asOf?: string; source?: string } | null | undefined;
+  const askWeb = async () => {
+    setWebAsked('asking');
+    try {
+      await requestWeb(db, row.id, Boolean(web));
+      setWebAsked('asked');
+    } catch {
+      setWebAsked('failed');
+    }
+  };
 
   return (
     <div className="detail">
@@ -170,6 +183,51 @@ export function DetailPane({
                 ))}
             </dl>
             {(row.cn || ins || fin) && <p className="source">正式な名前・法人番号・加入者数・従業員数・財務・事業の概要：「Gビズインフォ」（経済産業省）をもとに作成</p>}
+          </section>
+
+          <section>
+            <h3>会社 HP から（AI が会社概要などを読み取ったもの）</h3>
+            {web?.state === 'done' ? (
+              <>
+                <dl className="info">
+                  {(
+                    [
+                      ['正式な名前', 'officialName'],
+                      ['所在地', 'address'],
+                      ['従業員数', 'employees'],
+                      ['資本金', 'capital'],
+                      ['売上高', 'sales'],
+                    ] as const
+                  )
+                    .map(([label, k]) => [label, webItem(k)] as const)
+                    .filter(([, it]) => it?.value)
+                    .map(([label, it]) => (
+                      <div key={label} className="kv">
+                        <dt>{label}</dt>
+                        <dd>
+                          {it!.value}
+                          {it!.asOf ? `（${it!.asOf}）` : ''}{' '}
+                          {safeUrl(it!.source) && (
+                            <a href={safeUrl(it!.source)!} target="_blank" rel="noopener noreferrer">
+                              出どころ
+                            </a>
+                          )}
+                        </dd>
+                      </div>
+                    ))}
+                </dl>
+                <p className="source">読んだ日：{date(web.at)}。HP に書いてあることを AI が書き写したもので、古い・まちがっていることがあります。</p>
+              </>
+            ) : (
+              <p className="muted">
+                {web?.state === 'nosite' ? 'HP が見つかりませんでした。' : web?.state === 'blocked' ? 'HP が機械での読み込みを断っているので読めません。' : web?.state === 'failed' ? 'HP を読めませんでした。' : 'まだ読んでいません。'}
+              </p>
+            )}
+            {web?.state !== 'blocked' && (
+              <button className="btn" type="button" disabled={webAsked === 'asking' || webAsked === 'asked'} onClick={askWeb}>
+                {webAsked === 'asked' ? '頼みました（5分ごとに順番に読みます）' : webAsked === 'failed' ? '頼めませんでした。もう一度' : web ? 'HP を読み直してもらう' : 'HP を読んでもらう'}
+              </button>
+            )}
           </section>
 
           {detail.handoff.length > 0 && (

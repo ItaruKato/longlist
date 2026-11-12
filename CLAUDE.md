@@ -20,4 +20,6 @@
 9. ログインは `i-kato@spark-partners.jp`（メール確認済み）だけ
 10. コミットの作成者は `Claude <noreply@anthropic.com>`。モデル名はコミット・PR に書かない
 
+11. **会社 HP は自分で読みに行かない。** 台帳側の `companyWebSweep`（prtimes-inbox の functions/src/web.ts）が読む。Long List は `webQueue/{会社ID}` に依頼を書き（`at`: サーバーの時刻、`by: 'longlist'`、読み直すときは `redo: true`）、拾った項目は `companies.web`、ページの本文は `companyWeb/{会社ID}` を使う。足りないページがあれば web.ts の読み方を直す（先に本人に相談）
+
 `npm test` の `scripts/check-firebase.mjs` が 1〜3 を確かめる。

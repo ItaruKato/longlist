@@ -1,6 +1,6 @@
 import { gunzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
-import { articleStats, packRows, rowOf } from '../src/build';
+import { articleStats, headcountOf, packRows, rowOf } from '../src/build';
 import { fromTuple, type Row } from '../../src/lib/rows';
 
 describe('rowOf', () => {
@@ -45,6 +45,36 @@ describe('rowOf', () => {
     expect(rowOf('2', { name: '一般社団法人テスト協会', profile: { capital: '-' } })).toMatchObject({ ex: 'assoc', capital: null });
     // gBizINFO の資本金がなければ PR TIMES の企業情報の資本金を読む
     expect(rowOf('3', { name: '株式会社B', profile: { capital: '3,000万円' } }).capital).toBe(30000000);
+  });
+});
+
+describe('会社 HP から拾った項目（companies.web）', () => {
+  it('ほかに情報がないときだけ使う', () => {
+    const web = {
+      officialName: { value: '株式会社ウェブテスト', asOf: '', source: 'https://example.com/company' },
+      employees: { value: '120名（2026年4月）', asOf: '2026-04', source: 'https://example.com/company' },
+      capital: { value: '5,000万円', asOf: '', source: 'https://example.com/company' },
+      sales: { value: '32億円', asOf: '2025年3月期', source: 'https://example.com/company' },
+    };
+    expect(rowOf('1', { name: 'ウェブテスト', web })).toMatchObject({ official: '株式会社ウェブテスト', form: 'kk', employees: 120, capital: 5e7, sales: 32e8 });
+    // 法人番号の登録・有価証券報告書・企業情報があれば、そちらを使う
+    expect(
+      rowOf('2', {
+        name: 'ウェブテスト',
+        web,
+        gbiz: { name: '株式会社ウェブテスト本社', capital: 1e8, employees: 300 },
+        gbizFinance: { sales: { yen: 5e9 } },
+      }),
+    ).toMatchObject({ official: '株式会社ウェブテスト本社', employees: 300, capital: 1e8, sales: 5e9 });
+    // HP の名前に法人格がなければ正式な名前として使わない
+    expect(rowOf('3', { name: 'ウェブ', web: { officialName: { value: 'WEB TEST', asOf: '', source: '' } } })).toMatchObject({ official: '', form: '' });
+  });
+  it('従業員数は数字が1つのときだけ読む', () => {
+    expect(headcountOf('120名')).toBe(120);
+    expect(headcountOf('1,200人（2026年4月現在）')).toBe(1200);
+    expect(headcountOf('連結 1,200名（単体 300名）')).toBeNull();
+    expect(headcountOf('約100')).toBeNull();
+    expect(headcountOf('')).toBeNull();
   });
 });
 

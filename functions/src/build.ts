@@ -24,13 +24,16 @@ export function rowOf(id: string, c: Data): Row {
   const insured = (c.gbizInsured ?? {}) as Data;
   const finance = (c.gbizFinance ?? {}) as Data;
   const name = String(c.name ?? '');
-  // 正式な名前（法人番号で結びついた会社だけ）。PR TIMES の名前と同じなら持たない
-  const legalName = typeof gbiz.name === 'string' ? gbiz.name.trim() : '';
+  // 会社 HP から台帳の companyWebSweep が拾った項目（{ value, asOf, source }）。Long List は HP を自分で読まない
+  const web = (c.web ?? {}) as Record<string, { value?: string } | null | undefined>;
+  const webValue = (k: string) => (typeof web[k]?.value === 'string' ? web[k]!.value!.trim() : '');
+  // 正式な名前：法人番号の登録（gBizINFO）が一番確か。なければ HP の会社概要の名前。PR TIMES の名前と同じなら持たない
+  const legalName = (typeof gbiz.name === 'string' ? gbiz.name.trim() : '') || (legalFormOf(webValue('officialName')) ? webValue('officialName') : '');
   const official = legalName && legalName.normalize('NFKC') !== name.normalize('NFKC') ? legalName : '';
   const address = (profile.address as string | undefined) ?? (gbiz.location as string | undefined);
   const cn = String(c.corporateNumber ?? '');
   const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
-  const capital = num(gbiz.capital) ?? parseYen(profile.capital as string | undefined);
+  const capital = num(gbiz.capital) ?? parseYen(profile.capital as string | undefined) ?? parseYen(webValue('capital'));
   return {
     id,
     name,
@@ -44,11 +47,18 @@ export function rowOf(id: string, c: Data): Row {
     // 正式な名前（社団法人など）と PR TIMES の名前（PR事務局など）の、どちらかで外すと決まれば外す
     ex: excludeReason(legalName || name, address, Boolean(cn)) ?? (legalName ? excludeReason(name, address, Boolean(cn)) : null) ?? '',
     cn,
-    employees: num(gbiz.employees) ?? num(finance.employees),
-    sales: num((finance.sales as Data | undefined)?.yen),
+    employees: num(gbiz.employees) ?? num(finance.employees) ?? headcountOf(webValue('employees')),
+    sales: num((finance.sales as Data | undefined)?.yen) ?? parseYen(webValue('sales')),
     official,
     form: legalFormOf(legalName || name),
   };
+}
+
+/** HP の「従業員数」（例：120名、連結 1,200名（単体 300名））から人数。数字が1つだけのときだけ読む */
+export function headcountOf(text: string): number | null {
+  if (!text) return null;
+  const nums = [...text.normalize('NFKC').matchAll(/(\d[\d,]*)\s*(名|人)/g)].map((m) => Number(m[1].replace(/,/g, '')));
+  return nums.length === 1 && Number.isFinite(nums[0]) && nums[0] > 0 ? nums[0] : null;
 }
 
 /** companyArticles の1件から、最新の配信日（JST の日付）と直近1年の記事の数 */
@@ -104,7 +114,7 @@ export async function buildIndex(deps: { db: Firestore; now?: number; log?: (msg
   const now = deps.now ?? Date.now();
   const started = Date.now();
   const rows = new Map<string, Row>();
-  await scan(db, 'companies', ['name', 'profile', 'corporateNumber', 'gbiz.name', 'gbiz.capital', 'gbiz.employees', 'gbiz.location', 'gbizInsured.total', 'gbizFinance.sales', 'gbizFinance.employees'], (id, c) => {
+  await scan(db, 'companies', ['name', 'profile', 'corporateNumber', 'gbiz.name', 'gbiz.capital', 'gbiz.employees', 'gbiz.location', 'gbizInsured.total', 'gbizFinance.sales', 'gbizFinance.employees', 'web.officialName', 'web.employees', 'web.capital', 'web.sales'], (id, c) => {
     if (c.name) rows.set(id, rowOf(id, c));
   });
   await scan(db, 'companyArticles', ['a'], (id, d) => {
