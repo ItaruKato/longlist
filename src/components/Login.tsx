@@ -22,7 +22,7 @@ export function Login({ auth, wrongUser }: { auth: Auth; wrongUser: User | null 
   };
   return (
     <div className="center">
-      <div className="card">
+      <div className="card login">
         <b>Long List</b>
         {wrongUser ? (
           <>

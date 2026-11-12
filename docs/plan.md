@@ -7,7 +7,7 @@
 - [x] 段階0：リポジトリ、Hosting サイト `prtimes-longlist`、ログインの承認済みドメイン、自動デプロイの許可（Workload Identity。本人が設定）
 - [x] 段階1：ログインと台帳の件数だけの画面（https://prtimes-longlist.web.app）。main に push すると `hosting:longlist` だけをデプロイ
 - [x] 台帳（prtimes-inbox）に、法人番号が決まった会社の厚生年金の被保険者数（`gbizInsured`）と有価証券報告書の財務（`gbizFinance`）を足した（2026-11-12 本人が決定）
-- [ ] 段階2：一覧（AI なし）
+- [x] 段階2：一覧（AI なし）。地方・都道府県・業界（PR TIMES の業種）・人数・資本金・上場・最新記事・温度感・進捗・担当で絞り込み、7通りの並べ替え、除外した会社の画面（戻せる）、温度感・進捗・次にやること・担当・メモ、Watcher で読了にした記事のメモ、CSV（代表者・代表電話・HP 付き）、ホーム画面に追加
 - [ ] 段階3：業界タグの分類表（台帳側に置く。作る前に本人に中身を相談）
 - [ ] 段階4：AI のお試し（200社でモデルを比べる。業界タグ・除外・温度感に加えて、HP・記事から売上・決算公告も拾う）
 - [ ] 段階5：全社に AI
@@ -33,6 +33,13 @@
   - 官報（発行サイト・検索サービス）は規約で機械的な収集が禁止なので読まない。登記は有料なので使わない
 - 除外：自治体・大学・海外企業に加えて、一般・公益の社団/財団法人、NPO 法人、学校法人。医療法人・社会福祉法人は残す
 - 除外した会社は別の画面で確認でき、間違いなら戻せる
+
+## データの流れ（段階2）
+- Cloud Functions `longlistBuildIndex`（codebase longlist、6時間ごと＋デプロイの直後）が台帳の `companies`・`companyArticles` を読み、一覧用のまとめ `longlistIndex/{番号}`（1行1社の配列を JSON にして gzip した Bytes。1つ 900KB まで）と目次 `longlistMeta/index` を書く
+- 画面はまとめを読み、絞り込み・並べ替えは端末の中で行う。本人が付けるものは `longlist/{会社ID}`（画面が書く）
+- 会社を開いたときだけ、`companies`・`companyArticles`・`handoff`（その会社の記事IDで探す）を読む。CSV は代表者・電話・HP を `companies` から30社ずつ読む
+- 除外は名前と所在地で自動判定（`src/lib/exclude.ts`）。間違いは画面で戻せる（`longlist/{会社ID}.exclude`）
+- 手元で試すとき：Firestore・Auth のエミュレータを起動して `VITE_EMULATOR=1 npm run dev`、`__devLogin(メール, パスワード)` でログイン
 
 ## 分担（prtimes-inbox の docs/plan.md「Long List と Knowledge Base の分担」）
 - 業界タグの分類表と付ける処理は台帳側（prtimes-inbox の functions）に1つだけ置き、`companies` に書く。作るのはこのチャット

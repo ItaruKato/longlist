@@ -24,8 +24,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
       - name: 画面のテストとビルド（共有の決まりの確認を含む）
         run: npm ci && npm run lint && npm test && npm run build
+      - name: 関数のビルドとテスト
+        working-directory: functions
+        run: npm ci && npm run build && npm test
 
       - name: Google Cloud に認証
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
@@ -33,7 +39,11 @@ jobs:
         with:
           workload_identity_provider: projects/${{ env.PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github
           service_account: github-deploy@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
-      # Long List の分（prtimes-longlist サイト）だけを出す。Firestore・Watcher の関数には触れない
+      # Long List の分（prtimes-longlist サイトと codebase longlist の関数）だけを出す。Firestore・Watcher の関数には触れない
       - name: Firebase にデプロイ（Long List の分だけ）
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        run: npx -y firebase-tools@14.11.0 deploy --only hosting:longlist --project "$PROJECT_ID" --non-interactive
+        run: npx -y firebase-tools@14.11.0 deploy --only hosting:longlist,functions:longlist --project "$PROJECT_ID" --non-interactive
+      # 新しい版ですぐに一覧のまとめを作り直す（スケジュールを1回動かすだけ。関数を外から呼べるようにはしない）
+      - name: 一覧のまとめを作り直す
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: gcloud scheduler jobs run firebase-schedule-longlistBuildIndex-asia-northeast1 --location=asia-northeast1 --project="$PROJECT_ID"
