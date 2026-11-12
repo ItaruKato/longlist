@@ -9,6 +9,7 @@ import { yenLabel } from '../lib/yen';
 import { FilterPanel } from './FilterPanel';
 import { DetailPane } from './DetailPane';
 import { VirtualList } from './VirtualList';
+import { TrialPage } from './TrialPage';
 
 const KEY = 'longlist.view.v1';
 interface View {
@@ -80,6 +81,7 @@ export function ListPage({ db, onSignOut }: { db: Firestore; onSignOut: () => vo
   const [view, setView] = useState(loadView);
   const [sel, setSel] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [page, setPage] = useState<'list' | 'trial'>('list');
   const [csv, setCsv] = useState<string | null>(null);
   const f = view.f;
   const setF = (nf: Filters) => {
@@ -226,11 +228,14 @@ export function ListPage({ db, onSignOut }: { db: Firestore; onSignOut: () => vo
         <div className="toprow">
           <b className="brand">Long List</b>
           <div className="tabs">
-            <button type="button" className={f.view === 'list' ? 'on' : ''} onClick={() => setF({ ...f, view: 'list' })}>
+            <button type="button" className={page === 'list' && f.view === 'list' ? 'on' : ''} onClick={() => (setPage('list'), setF({ ...f, view: 'list' }))}>
               一覧
             </button>
-            <button type="button" className={f.view === 'excluded' ? 'on' : ''} onClick={() => setF({ ...f, view: 'excluded' })}>
+            <button type="button" className={page === 'list' && f.view === 'excluded' ? 'on' : ''} onClick={() => (setPage('list'), setF({ ...f, view: 'excluded' }))}>
               除外 {excludedCount ? excludedCount.toLocaleString() : ''}
+            </button>
+            <button type="button" className={page === 'trial' ? 'on' : ''} onClick={() => setPage('trial')}>
+              タグのお試し
             </button>
           </div>
           <button className="ghost" type="button" onClick={onSignOut}>
@@ -293,7 +298,7 @@ export function ListPage({ db, onSignOut }: { db: Firestore; onSignOut: () => vo
           </p>
         </aside>
       )}
-      <main className="list">{list}</main>
+      <main className="list">{page === 'trial' ? <TrialPage db={db} rows={all} states={states} onOpen={setSel} selected={sel} /> : list}</main>
       {wide ? (
         <section className="pane">{selRow ? <DetailPane db={db} row={selRow} state={states.get(selRow.id)} onClose={() => setSel(null)} /> : <p className="muted pad">会社を選ぶと、ここに詳しい情報が出ます。</p>}</section>
       ) : (

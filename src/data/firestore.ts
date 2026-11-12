@@ -1,5 +1,7 @@
 import {
+  arrayUnion,
   collection,
+  deleteField,
   doc,
   documentId,
   getDoc,
@@ -8,7 +10,9 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
   where,
+  writeBatch,
   type Bytes,
   type Firestore,
 } from 'firebase/firestore';
@@ -135,5 +139,79 @@ export async function loadContacts(db: Firestore, ids: string[], onProgress?: (d
     }
   };
   await Promise.all(Array.from({ length: Math.min(8, groups.length) }, worker));
+  return out;
+}
+
+// ---- 業界タグのお試し（台帳の industryTagsSweep に頼み、AI ごとの答えを比べる） ----
+
+export type ModelKey = 'sonnet' | 'haiku' | 'opus';
+export const MODEL_LABEL: Record<ModelKey, string> = { sonnet: 'Sonnet', haiku: 'Haiku', opus: 'Opus' };
+export interface TagDef {
+  code: string;
+  label: string;
+  group: string;
+}
+export interface TagAnswer {
+  main: string;
+  subs: string[];
+  biz: 'btob' | 'btoc' | 'both';
+  confidence: 'high' | 'mid' | 'low';
+  reason: string;
+  model: string;
+  at: string;
+}
+export type Verdict = 'ok' | 'partial' | 'ng';
+export interface Trial {
+  ids: string[];
+  requested: ModelKey[];
+  verdicts?: Record<string, Partial<Record<ModelKey, Verdict>>>;
+}
+
+/** 分類の表（台帳が meta/industryTags に書く） */
+export async function loadTagDefs(db: Firestore): Promise<TagDef[]> {
+  const s = await getDoc(doc(db, 'meta', 'industryTags'));
+  return (s.get('tags') as TagDef[] | undefined) ?? [];
+}
+
+/** お試しの内容（選んだ会社・頼んだ AI・○△×）。画面が書くものなので、見続けずに必要なときに読む */
+export async function loadTrial(db: Firestore, id: string): Promise<Trial | null> {
+  const s = await getDoc(doc(db, 'longlistTrials', id));
+  return s.exists() ? (s.data() as Trial) : null;
+}
+
+/** 台帳に業界タグを頼む（industryQueue/{会社ID}。すでに頼んでいる AI は残して足す） */
+async function enqueue(db: Firestore, ids: string[], model: ModelKey, trial: string) {
+  for (let i = 0; i < ids.length; i += 400) {
+    const b = writeBatch(db);
+    for (const id of ids.slice(i, i + 400)) b.set(doc(db, 'industryQueue', id), { models: arrayUnion(model), at: serverTimestamp(), by: 'longlist', trial }, { merge: true });
+    await b.commit();
+  }
+}
+
+export async function startTrial(db: Firestore, id: string, ids: string[], model: ModelKey) {
+  await setDoc(doc(db, 'longlistTrials', id), { ids, requested: [model], createdAt: serverTimestamp() });
+  await enqueue(db, ids, model, id);
+}
+
+export async function requestTrialModel(db: Firestore, id: string, ids: string[], model: ModelKey) {
+  await updateDoc(doc(db, 'longlistTrials', id), { requested: arrayUnion(model) });
+  await enqueue(db, ids, model, id);
+}
+
+export async function setVerdict(db: Firestore, trial: string, company: string, model: ModelKey, v: Verdict | null) {
+  await updateDoc(doc(db, 'longlistTrials', trial), { [`verdicts.${company}.${model}`]: v ?? deleteField() });
+}
+
+/** AI ごとの答え（industryTrials）を30社ずつ読む */
+export async function loadAnswers(db: Firestore, ids: string[]): Promise<Map<string, Partial<Record<ModelKey, TagAnswer>> & { error?: string }>> {
+  const out = new Map<string, Partial<Record<ModelKey, TagAnswer>> & { error?: string }>();
+  const groups: string[][] = [];
+  for (let i = 0; i < ids.length; i += 30) groups.push(ids.slice(i, i + 30));
+  await Promise.all(
+    groups.map(async (g) => {
+      const snap = await getDocs(query(collection(db, 'industryTrials'), where(documentId(), 'in', g)));
+      for (const d of snap.docs) out.set(d.id, d.data() as Partial<Record<ModelKey, TagAnswer>> & { error?: string });
+    }),
+  );
   return out;
 }
