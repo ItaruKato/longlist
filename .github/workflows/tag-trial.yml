@@ -1,0 +1,48 @@
+name: tag-trial
+
+# 業界タグのお試し（画面の「○○ で200社を試す」と同じ）。Actions の画面か gh workflow run から手で動かす。ログは件数だけ
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'start（頼む）か status（進み具合）'
+        required: true
+        default: status
+        type: choice
+        options: [status, start]
+      model:
+        description: '頼む AI'
+        required: true
+        default: sonnet
+        type: choice
+        options: [sonnet, haiku, opus]
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: prtimes-inbox
+  PROJECT_NUMBER: '723210521199'
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - name: 準備
+        working-directory: functions
+        run: npm ci && npm run build
+      - name: Google Cloud に認証
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/${{ env.PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github
+          service_account: github-deploy@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
+      - name: お試し
+        working-directory: functions
+        run: node scripts/tag-trial.cjs "${{ inputs.action }}" "${{ inputs.model }}"
