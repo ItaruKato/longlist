@@ -42,7 +42,7 @@
 ## 業界タグ（2026-11-12 本人が決定）
 - メイン1つ＋サブ2つまで（サブはなくてもよい）、BtoB／BtoC／両方も付ける。材料は PR TIMES の記事の見出し（新しい順に30件）・PR TIMES の業種・gBizINFO の事業の概要・HP の会社名
 - 処理は台帳側の `industryTagsSweep`。Long List は `industryQueue/{会社ID}` に頼み（models に AI の名前、全社に付けるときは apply に決めた AI）、答えは `industryTrials`（AI ごと）と `companies.industryTags`（決めた AI）を読む。分類の名前は `meta/industryTags`
-- **全社に付ける AI は Opus（2026-11-12 本人が決定）**。一覧のまとめ（6時間ごと）のときに、まだタグのない会社（除外を除く。最新記事が新しい順に5,000社まで）を `industryQueue` に Opus・apply で頼む。台帳が5分ごとに80社ずつ付けるので、全社（約5万社）は2日ほど。1社あたり約0.5セント（お試しの実績）
+- **全社に付ける AI は Opus（2026-11-12 本人が決定）**。一覧のまとめ（6時間ごと）のときに、まだタグのない会社（除外を除く。最新記事が新しい順に）をまとめて `industryQueue` に Opus・apply で頼む。台帳が5分ごとに160社ずつ付ける（2026-11-13 本人の指示で速めた）。1社あたり約0.7セント（全社の実績）
 - 画面：一覧の「業界」は業界タグ（なければ PR TIMES の業種）。絞り込みに「業界タグ（メインかサブ）」「BtoB／BtoC」。詳細にタグ・理由・確かさ。CSV に業界タグ・サブ・BtoB/BtoC
 - お試し：画面の「タグのお試し」（または GitHub Actions の tag-trial：start / status。ログは件数だけ）で200社をくじ引き → まず Sonnet、同じ200社で Haiku・Opus。本人が ○△× を付け（`longlistTrials/t1`）、○の割合と費用で AI を決めてから全社に付ける
 

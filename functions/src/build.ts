@@ -15,8 +15,8 @@ import { legalFormOf } from '../../src/lib/legal';
 
 /** 全社の業界タグに使う AI（2026-11-12 本人が決定） */
 export const ADOPTED_MODEL = 'opus';
-/** 1回（6時間ごと）に頼む数の上限。台帳は5分ごとに80社（6時間で約5,700社）処理する */
-export const ENQUEUE_PER_RUN = 5000;
+/** 1回（6時間ごと）に頼む数の上限。2026-11-13 本人の指示で、まだタグのない会社をまとめて頼むようにした（台帳は5分ごとに160社） */
+export const ENQUEUE_PER_RUN = 100_000;
 
 const PAGE = 1000;
 const YEAR_MS = 365 * 86400e3;
